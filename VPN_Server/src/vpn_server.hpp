@@ -61,8 +61,8 @@ public:
         parseArguments(argc, argv); // fill 'cliParams struct'
 
         manager = new IPManager(cliParams.virtualNetworkIp + '/' + cliParams.networkMask);
-        tunMgr  = new TunnelManager("data/pid_list.dat",
-                                    "data/tun_list.dat");
+        tunMgr  = new TunnelManager("../data/pid_list.dat",
+                                    "../data/tun_list.dat");
 
         // Enable IP forwarding
         tunMgr->execTerminalCommand("echo 1 > /proc/sys/net/ipv4/ip_forward");
