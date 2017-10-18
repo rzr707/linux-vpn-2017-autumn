@@ -25,7 +25,6 @@
 #include <linux/if_tun.h>
 
 #include <ifaddrs.h>
-#include <libexplain/ioctl.h>
 
 /**
  * @brief VPNServer class\r\n
@@ -377,10 +376,6 @@ public:
         if (int status = ioctl(interface, TUNSETIFF, &ifr)) {
             TunnelManager::log("Cannot get TUN interface\nStatus is: " +
                                status,
-                               std::cerr);
-            // for explaining why is ioctl() fails (used libexplain library):
-            TunnelManager::log(std::string() + "Explaining: " +
-                               explain_ioctl(interface, TUNSETIFF, &ifr),
                                std::cerr);
             exit(1);
         }

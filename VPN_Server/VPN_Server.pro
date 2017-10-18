@@ -14,8 +14,7 @@ HEADERS += \
 
 LIBS += -lcrypto \
         -lssl \
-        -lpthread \
-        -lexplain
+        -lpthread
 
 DISTFILES += \
     other.txt
