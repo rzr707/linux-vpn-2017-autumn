@@ -44,13 +44,14 @@
  */
 class VPNServer {
 private:
-    int              argc;
-    char**           argv;
-    unsigned int     tunnelCounter;
-    ClientParameters cliParams;
-    IPManager*       manager;
-    std::string      port;
-    TunnelManager*   tunMgr;
+    int                  argc;
+    char**               argv;
+    unsigned int         tunnelCounter;
+    ClientParameters     cliParams;
+    IPManager*           manager;
+    std::string          port;
+    TunnelManager*       tunMgr;
+    std::recursive_mutex mutex;
 
 public:
     explicit VPNServer
@@ -61,8 +62,8 @@ public:
         parseArguments(argc, argv); // fill 'cliParams struct'
 
         manager = new IPManager(cliParams.virtualNetworkIp + '/' + cliParams.networkMask);
-        tunMgr  = new TunnelManager("../data/pid_list.dat",
-                                    "../data/tun_list.dat");
+        tunMgr  = new TunnelManager("data/pid_list.dat",
+                                    "data/tun_list.dat");
 
         // Enable IP forwarding
         tunMgr->execTerminalCommand("echo 1 > /proc/sys/net/ipv4/ip_forward");
@@ -132,6 +133,7 @@ public:
      * в котором хранится ip-адрес, назначенный клиенту\r\n
      */
     void initServer() {
+        mutex.lock();
         // run commands via unix terminal (needs sudo)
         std::string serverIp = IPManager::getIpString(manager->nextIp4Address());
         std::string clientIp = IPManager::getIpString(manager->nextIp4Address());
@@ -144,17 +146,18 @@ public:
 
         // fill array with parameters to send:
         buildParameters(clientIp);
+        mutex.unlock();
 
         // wait for a tunnel.
         int tunnel;
         while ((tunnel = get_tunnel(port.c_str(), cliParams.secretPassword.c_str())) != -1) {
 
             TunnelManager::log("New client connected to [" + tunStr + "]");
-            /* fork this process:*/
-            int pid = fork();
-            if(pid == 0) { // this is child process
-                initServer();
-            }
+
+            /* execute this method again in another thread: */
+            std::thread thr(&VPNServer::initServer, this);
+            thr.detach();
+
             std::string tempTunStr = tunStr;
 
             // put the tunnel into non-blocking mode.
@@ -253,7 +256,7 @@ public:
             TunnelManager::log("Client has been disconnected from tunnel [" +
                                tempTunStr + "]");
             close(tunnel);
-            // return because of fork():
+            /* @TODO: Close tunnel here via execTeminal*/
             return;
         }
         TunnelManager::log("Cannot create tunnels", std::cerr);
