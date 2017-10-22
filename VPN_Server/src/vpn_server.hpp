@@ -19,6 +19,7 @@
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/file.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <net/if.h>
@@ -45,22 +46,22 @@ class VPNServer {
 private:
     int                  argc;
     char**               argv;
-    unsigned int         tunnelCounter;
     ClientParameters     cliParams;
     IPManager*           manager;
     std::string          port;
     TunnelManager*       tunMgr;
     std::recursive_mutex mutex;
+    const int            TIMEOUT_LIMIT = 60000;
 
 public:
     explicit VPNServer
     (int argc, char** argv) {
         this->argc = argc;
         this->argv = argv;
-        tunnelCounter = 0;
         parseArguments(argc, argv); // fill 'cliParams struct'
 
-        manager = new IPManager(cliParams.virtualNetworkIp + '/' + cliParams.networkMask);
+        manager = new IPManager(cliParams.virtualNetworkIp + '/' + cliParams.networkMask,
+                                6); // IP pool init size
         tunMgr  = new TunnelManager("data/pid_list.dat",
                                     "data/tun_list.dat");
 
@@ -85,8 +86,8 @@ public:
         // Disable IP Forwarding:
         tunMgr->execTerminalCommand("echo 0 > /proc/sys/net/ipv4/ip_forward");
         /* Clear unix settings: removing tunnels and closing child processes */
-        tunMgr->closeAllTunnels(tunMgr->getInfoList(tunMgr->getTunListFilename()));
-        tunMgr->killAllProcesses(tunMgr->getInfoList(tunMgr->getPidListFilename()));
+        tunMgr->closeAllTunnels();
+        // tunMgr->killAllProcesses(tunMgr->getInfoList(tunMgr->getPidListFilename()));
 
         // remove NAT rule from iptables:
         std::string virtualLanAddress = cliParams.virtualNetworkIp + '/' + cliParams.networkMask;
@@ -95,8 +96,7 @@ public:
                 = "iptables -t nat -D POSTROUTING -s " + virtualLanAddress +
                   " -o " + physInterfaceName + " -j MASQUERADE";
         tunMgr->execTerminalCommand(postrouting);
-        //tunMgr->execTerminalCommand("ifdown " + physInterfaceName + " && ifup " + physInterfaceName);
-        //tunMgr->execTerminalCommand("service networking restart");
+
         delete manager;
         delete tunMgr;
     }
@@ -110,11 +110,14 @@ public:
     void initConsoleInput() {
         bool isExit = false;
         std::string input;
-        std::thread t(&VPNServer::initServer, this);
-        t.detach();
 
-        std::cout << "Type 'exitvpn' in terminal to close VPN Server"
-                  << std::endl;
+        mutex.lock();
+            std::cout << "\033[4;32mType 'exitvpn' in terminal to close VPN Server\033[0m"
+                      << std::endl;
+        mutex.unlock();
+
+        std::thread t(&VPNServer::createNewConnection, this);
+        t.detach();
         while(!isExit) {
             getline(std::cin, input);
             if(input == "exitvpn") {
@@ -125,26 +128,37 @@ public:
     }
 
     /**
-     * @brief initServer\r\n
-     * Нужно форкать внутри initServer и\r\n
-     * вызывать ТУТ build_parameters для каждого нового клиента,\r\n
-     * ведь в build_parameters заполняется статический массив,\r\n
-     * в котором хранится ip-адрес, назначенный клиенту\r\n
+     * @brief createNewConnection\r\n
+     * Method creates new connection (tunnel)
+     * waiting for client. When client is connected,
+     * the new instance of this method will be runned
+     * in another thread
      */
-    void initServer() {
+    void createNewConnection() {
         mutex.lock();
         // run commands via unix terminal (needs sudo)
-        std::string serverIp = IPManager::getIpString(manager->nextIp4Address());
-        std::string clientIp = IPManager::getIpString(manager->nextIp4Address());
-        std::string tunStr   = "tun" + to_string(tunnelCounter);
+        in_addr_t serTunAddr = manager->getAddrFromPool();
+        in_addr_t cliTunAddr = manager->getAddrFromPool();
+        std::string serverIpStr = IPManager::getIpString(serTunAddr);
+        std::string clientIpStr = IPManager::getIpString(cliTunAddr);
+        size_t tunNumber     = tunMgr->getTunNumber();
+        std::string tunStr   = "tun" + std::to_string(tunNumber);
+
+        if(serTunAddr == 0 || cliTunAddr == 0) {
+            TunnelManager::log("No free IP addresses. Tunnel will not be created.",
+                               std::cerr);
+            return;
+        }
 
         //TunnelManager::log("Working with tunnel [" + tunStr + "] now..");
-        initUnixSettings(serverIp, clientIp);
+        tunMgr->createUnixTunnel(serverIpStr,
+                                 clientIpStr,
+                                 tunStr);
         // Get TUN interface.
         int interface = get_interface(tunStr.c_str());
 
         // fill array with parameters to send:
-        buildParameters(clientIp);
+        buildParameters(clientIpStr);
         mutex.unlock();
 
         // wait for a tunnel.
@@ -153,8 +167,9 @@ public:
 
             TunnelManager::log("New client connected to [" + tunStr + "]");
 
-            /* execute this method again in another thread: */
-            std::thread thr(&VPNServer::initServer, this);
+            /* if client is connected then run another instance of connection
+             * in a new thread: */
+            std::thread thr(&VPNServer::createNewConnection, this);
             thr.detach();
 
             std::string tempTunStr = tunStr;
@@ -200,7 +215,7 @@ public:
                 if (length == 0) {
                     TunnelManager::log(std::string() +
                                        "recv() length == " +
-                                       to_string(length) +
+                                       std::to_string(length) +
                                        ". Breaking..",
                                        std::cerr);
                     break;
@@ -224,15 +239,14 @@ public:
                 // if we are idle or waiting for the network, sleep for a
                 // fraction of time to avoid busy looping.
                 if (idle) {
-                    usleep(100000); // sleep for 10 seconds
+                    std::this_thread::sleep_for(std::chrono::microseconds(100000));
 
                     // increase the timer. This is inaccurate but good enough,
                     // since everything is operated in non-blocking mode.
                     timer += (timer > 0) ? 100 : -100;
 
-                    // we are receiving for a long time but not sending.
-                    // can you figure out why we use a different value? :)
-                    if (timer < -16000) {
+                    // we are receiving for a long time but not sending
+                    if (timer < -10000) {  // -16000
                         // send empty control messages.
                         packet[0] = 0;
                         for (int i = 0; i < 3; ++i) {
@@ -244,7 +258,7 @@ public:
                     }
 
                     // we are sending for a long time but not receiving.
-                    if (timer > 20000) {
+                    if (timer > TIMEOUT_LIMIT) {
                         TunnelManager::log("[" + tempTunStr + "]" +
                                            "Sending for a long time but"
                                            " not receiving. Breaking...");
@@ -254,8 +268,12 @@ public:
             }
             TunnelManager::log("Client has been disconnected from tunnel [" +
                                tempTunStr + "]");
+
             close(tunnel);
-            /* @TODO: Close tunnel here via execTeminal*/
+            //
+            manager->returnAddrToPool(serTunAddr);
+            manager->returnAddrToPool(cliTunAddr);
+            tunMgr->closeTunNumber(tunNumber);
             return;
         }
         TunnelManager::log("Cannot create tunnels", std::cerr);
@@ -307,10 +325,10 @@ public:
             if(strcmp("-i", argv[i]) == EQUALS) {
                 cliParams.physInterface = argv[i + 1];
             }
-            // just for testing:
+            /*
             if(strcmp("-tn", argv[i]) == EQUALS) {
                 tunnelCounter = atoi(argv[i + 1]);
-            }
+            } */
         }
 
         /* if there was no specific arguments,
@@ -423,30 +441,6 @@ public:
         return tunnel;
     }
 
-    /**
-     * @brief initUnixSettings - uplink new p2p tunnel
-     *                           (server must be running with root permissions)
-     * @param serverTunAddr    - server tunnel ip
-     * @param clientTunAddr    - client tunnel ip
-     */
-    void initUnixSettings
-    (const std::string& serverTunAddr,
-     const std::string& clientTunAddr) {
-
-        std::string tunName = "tun" + std::to_string(tunnelCounter);
-        std::string tunInterfaceSetup = "ip tuntap add dev " + tunName +  " mode tun";
-        tunMgr->execTerminalCommand(tunInterfaceSetup);
-
-        string ifconfig = "ifconfig " + tunName + " " + serverTunAddr +
-                          " dstaddr " + clientTunAddr + " up";
-        tunMgr->execTerminalCommand(ifconfig);
-        // write tunnel to created tunnels list:
-        tunMgr->write(tunMgr->getTunListFilename(), tunName);
-        // write process pid to created processes list:
-        tunMgr->write(tunMgr->getPidListFilename(), to_string(getpid()));
-
-        ++tunnelCounter; // increment tunnel number for next connection
-    }
 
 };
 
