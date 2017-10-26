@@ -4,13 +4,14 @@
 #define IP_MANAGER_HPP
 
 #include <iostream>
+#include <queue>
 #include <string>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <stdexcept>
+#include <mutex>
 
-using namespace std;
 
 /**
  * @brief The IPManager class
@@ -20,9 +21,13 @@ using namespace std;
  */
 class IPManager {
 private:
-    in_addr_t networkAddress;
-    in_addr_t ipaddr;
-    in_addr_t netmask; // маска подсети
+    in_addr_t              networkAddress;
+    in_addr_t              ipaddr;
+    in_addr_t              netmask; // маска подсети
+    std::mutex             mutex;
+    std::queue<in_addr_t>* addrPoolPtr;
+    size_t                 usedAddrCounter;
+
 public:
     /* Forbid copy ctor and standart ctor: */
     IPManager() = delete;
@@ -33,13 +38,14 @@ public:
      * @param ipAndMask - contains ip address and mask bits
      *  like "x.x.x.x/y" where y is bit count (from 0 to 32)
      */
-    explicit IPManager(std::string ipAndMask) {
+    explicit IPManager(std::string ipAndMask, size_t poolInitSize = 100) {
 
         size_t slashPos = ipAndMask.find('/');
 
         if(slashPos == std::string::npos ||
-           ipAndMask.at(slashPos) == ipAndMask.at(ipAndMask.length() - 1)) {
-            cerr << "Bit mask was not found. Using default: 255.255.255.0" << endl;
+            ipAndMask.at(slashPos) == ipAndMask.at(ipAndMask.length() - 1)) {
+            std::cerr << "Bit mask was not found. Using default: 255.255.255.0"
+                      << std::endl;
             ipaddr = inet_addr(ipAndMask.c_str());
             networkAddress = ipaddr;
             netmask = inet_addr("255.255.255.0");
@@ -59,15 +65,64 @@ public:
 
             in_addr_t tempmask = (0xffffffff >> (32 - networkMaskBitCount )) << (32 - networkMaskBitCount);
             netmask = htonl(tempmask);
-        }
 
+            // address pool init:
+            usedAddrCounter = 0;
+            addrPoolPtr = new std::queue<in_addr_t>();
+            for(size_t i = 0; i < poolInitSize; ++i) {
+                addrPoolPtr->push(genNextIp());
+            }
+        }
+    }
+
+    ~IPManager() {
+        delete addrPoolPtr;
+    }
+
+    /**
+     * @brief getAddrFromPool
+     * @return IP address from the pool of addresses
+     */
+    in_addr_t getAddrFromPool() {
+
+        mutex.lock();
+
+        if(addrPoolPtr->empty()) {
+            if(usedAddrCounter < networkCapacity()) {
+                for(size_t i = 0; i < usedAddrCounter; ++i) {
+                    addrPoolPtr->push(genNextIp());
+                }
+            } else {
+                return 0; // can't give IP address
+                // throw std::runtime_error("usedAddrCounter > networkCapacity");
+            }
+        }
+        in_addr_t result = addrPoolPtr->front();
+        addrPoolPtr->pop();
+        ++usedAddrCounter; // counter of addresses that are already using by tunnels
+
+        mutex.unlock();
+        return result;
+    }
+
+    /**
+     * @brief returnAddrToPool
+     * Pushes back freed IP-address back<br>
+     * to the pool of IP addresses
+     * @param ip - ip address to push into queue
+     */
+    void returnAddrToPool(in_addr_t ip) {
+        mutex.lock();
+            addrPoolPtr->push(ip);
+            --usedAddrCounter;
+        mutex.unlock();
     }
 
     in_addr_t getSockaddrIn() {
         return ipaddr;
     }
 
-    in_addr_t nextIp4Address() {
+    in_addr_t genNextIp() {
         in_addr_t temp = ipaddr;
         temp = ntohl(temp);
         temp = temp + 1;
@@ -76,7 +131,8 @@ public:
         if(isInRange(temp))
             ipaddr = temp;
         else {
-            cerr << "Error: no free ip addresses in the pool" << endl;
+            return 0;
+            // throw std::runtime_error("Cannot allocate new IP address!");
         }
 
         return ipaddr;
@@ -88,7 +144,7 @@ public:
         in_addr_t addr = 0;
 
         if(sscanf(ip.c_str(), "%d.%d.%d.%d", &a, &b, &c, &d) != 4) {
-            throw runtime_error("ipToUint: error");
+            throw std::runtime_error("ipToUint: error");
         }
 
         addr =  a << 24;

@@ -28,7 +28,7 @@
 
 int main(int argc, char **argv) {
     if (argc < 3) {
-        cout <<
+        std::cout <<
         "* How to:\n"
         "* " << argv[0] << " 8000 test -m 1400 -a 10.0.0.0 8 -d 8.8.8.8 -r 0.0.0.0 0 -i wlan0\n"
         "*  where: argv[i]\n"
