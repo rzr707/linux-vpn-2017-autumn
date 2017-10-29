@@ -12,9 +12,8 @@ HEADERS += \
     src/tunnel_mgr.hpp \
     src/log.hpp
 
-LIBS += -lcrypto \
-        -lssl \
-        -lpthread
+LIBS += -lpthread \
+        -lwolfssl \
 
 DISTFILES += \
     other.txt

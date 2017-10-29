@@ -26,6 +26,8 @@
 #include <linux/if_tun.h>
 
 #include <ifaddrs.h>
+#include <wolfssl/options.h>
+#include <wolfssl/ssl.h>
 
 /**
  * @brief VPNServer class\r\n
@@ -52,6 +54,7 @@ private:
     TunnelManager*       tunMgr;
     std::recursive_mutex mutex;
     const int            TIMEOUT_LIMIT = 60000;
+    WOLFSSL_CTX*         ctx;
 
 public:
     explicit VPNServer
@@ -79,7 +82,7 @@ public:
                 = "iptables -t nat -A POSTROUTING -s " + virtualLanAddress +
                   " -o " + physInterfaceName + " -j MASQUERADE";
         tunMgr->execTerminalCommand(postrouting);
-
+        initSsl(); // initialize ssl context
     }
 
     ~VPNServer() {
@@ -97,6 +100,9 @@ public:
                   " -o " + physInterfaceName + " -j MASQUERADE";
         tunMgr->execTerminalCommand(postrouting);
 
+        wolfSSL_CTX_free(ctx);
+        wolfSSL_Cleanup();
+
         delete manager;
         delete tunMgr;
     }
@@ -112,7 +118,7 @@ public:
         std::string input;
 
         mutex.lock();
-            std::cout << "\033[4;32mType 'exitvpn' in terminal to close VPN Server\033[0m"
+            std::cout << "\033[4;32mType 'exitvpn' in terminal to close VPN Server(DTLS ver.)\033[0m"
                       << std::endl;
         mutex.unlock();
 
@@ -136,6 +142,8 @@ public:
      */
     void createNewConnection() {
         mutex.lock();
+        // create ssl from sslContext:
+        WOLFSSL* ssl = nullptr;
         // run commands via unix terminal (needs sudo)
         in_addr_t serTunAddr = manager->getAddrFromPool();
         in_addr_t cliTunAddr = manager->getAddrFromPool();
@@ -162,8 +170,10 @@ public:
         mutex.unlock();
 
         // wait for a tunnel.
-        int tunnel;
-        while ((tunnel = get_tunnel(port.c_str(), cliParams.secretPassword.c_str())) != -1) {
+        std::pair<int, WOLFSSL*> tunnel;
+        while ((tunnel = get_tunnel(port.c_str(), cliParams.secretPassword.c_str(), ssl)).first != -1
+               &&
+               tunnel.second != nullptr) {
 
             TunnelManager::log("New client connected to [" + tunStr + "]");
 
@@ -174,15 +184,28 @@ public:
 
             std::string tempTunStr = tunStr;
 
-            // put the tunnel into non-blocking mode.
-            fcntl(tunnel, F_SETFL, O_NONBLOCK);
 
+            // put the tunnel into non-blocking mode.
+            fcntl(tunnel.first, F_SETFL, O_NONBLOCK);
+            int sentParameters = -12345;
             // send the parameters several times in case of packet loss.
             for (int i = 0; i < 3; ++i) {
+                sentParameters =
+                    wolfSSL_send(tunnel.second, cliParams.parametersToSend,
+                                 sizeof(cliParams.parametersToSend),
+                                 0);
+
+                    if(sentParameters < 0) {
+                    TunnelManager::log("Error sending parameters: " +
+                                       std::to_string(sentParameters));
+                    int e = wolfSSL_get_error(ssl, 0);
+                    printf("error = %d, %s\n", e, wolfSSL_ERR_reason_error_string(e));
+                }
+                /*
                 send(tunnel,
                      cliParams.parametersToSend,
                      sizeof(cliParams.parametersToSend),
-                     MSG_NOSIGNAL);
+                     MSG_NOSIGNAL); */
             }
 
             // allocate the buffer for a single packet.
@@ -199,7 +222,7 @@ public:
                 int length = read(interface, packet, sizeof(packet));
                 if (length > 0) {
                     // write the outgoing packet to the tunnel.
-                    send(tunnel, packet, length, MSG_NOSIGNAL);
+                    wolfSSL_send(tunnel.second, packet, length, MSG_NOSIGNAL);
 
                     // there might be more outgoing packets.
                     idle = false;
@@ -211,7 +234,7 @@ public:
                 }
 
                 // read the incoming packet from the tunnel.
-                length = recv(tunnel, packet, sizeof(packet), 0);
+                length = wolfSSL_recv(tunnel.second, packet, sizeof(packet), 0);
                 if (length == 0) {
                     TunnelManager::log(std::string() +
                                        "recv() length == " +
@@ -250,7 +273,7 @@ public:
                         // send empty control messages.
                         packet[0] = 0;
                         for (int i = 0; i < 3; ++i) {
-                            send(tunnel, packet, 1, MSG_NOSIGNAL);
+                            wolfSSL_send(ssl, packet, 1, MSG_NOSIGNAL);
                         }
 
                         // switch to sending.
@@ -269,7 +292,10 @@ public:
             TunnelManager::log("Client has been disconnected from tunnel [" +
                                tempTunStr + "]");
 
-            close(tunnel);
+            close(tunnel.first);
+            wolfSSL_set_fd(tunnel.second, 0);
+            wolfSSL_shutdown(tunnel.second);
+            wolfSSL_free(tunnel.second);
             //
             manager->returnAddrToPool(serTunAddr);
             manager->returnAddrToPool(cliTunAddr);
@@ -401,7 +427,8 @@ public:
         return interface;
     }
 
-    int get_tunnel(const char *port, const char *secret) {
+    std::pair<int, WOLFSSL*>
+    get_tunnel(const char *port, const char *secret, WOLFSSL* ssl) {
         // we use an IPv6 socket to cover both IPv4 and IPv6.
         int tunnel = socket(AF_INET6, SOCK_DGRAM, 0);
         int flag = 1;
@@ -418,27 +445,75 @@ public:
         // call bind(2) in a loop since Linux does not have SO_REUSEPORT.
         while (bind(tunnel, (sockaddr *)&addr, sizeof(addr))) {
             if (errno != EADDRINUSE) {
-                return -1;
+                return std::pair<int, WOLFSSL*>(-1, nullptr);
             }
-            usleep(100000);
+            std::this_thread::sleep_for(std::chrono::microseconds(100000));
         }
 
         // receive packets till the secret matches.
         char packet[1024];
         socklen_t addrlen;
-        do {
             addrlen = sizeof(addr);
             int n = recvfrom(tunnel, packet, sizeof(packet), 0,
                     (sockaddr *)&addr, &addrlen);
             if (n <= 0) {
-                return -1;
+                return std::pair<int, WOLFSSL*>(-1, nullptr);
             }
             packet[n] = 0;
-        } while (packet[0] != 0 || strcmp(secret, &packet[1]));
 
         // connect to the client
         connect(tunnel, (sockaddr *)&addr, addrlen);
-        return tunnel;
+
+        /* Create the WOLFSSL Object */
+        if ((ssl = wolfSSL_new(ctx)) == NULL) {
+            printf("wolfSSL_new error.\n");
+            exit(1);
+        }
+
+        /* set the session ssl to client connection port */
+        wolfSSL_set_fd(ssl, tunnel);
+        wolfSSL_set_using_nonblock(ssl, 1);
+
+        if (wolfSSL_accept(ssl) != SSL_SUCCESS) {
+            int e = wolfSSL_get_error(ssl, 0);
+            printf("error = %d, %s\n", e, wolfSSL_ERR_reason_error_string(e));
+            printf("SSL_accept failed.\n");
+            exit(1);
+        }
+
+        return std::pair<int, WOLFSSL*>(tunnel, ssl);
+    }
+
+    void initSsl() {
+        char caCertLoc[] = "/home/user/Ssl_Server/certs/ca_cert.pem";
+        char servCertLoc[] = "/home/user/Ssl_Server/certs/server-cert.pem";
+        char servKeyLoc[] = "/home/user/Ssl_Server/certs/server-key.pem";
+        /* Initialize wolfSSL */
+        wolfSSL_Init();
+
+        /* Set ctx to DTLS 1.2 */
+        if ((ctx = wolfSSL_CTX_new(wolfDTLSv1_2_server_method())) == NULL) {
+            printf("wolfSSL_CTX_new error.\n");
+            exit(1);
+        }
+        /* Load CA certificates */
+        if (wolfSSL_CTX_load_verify_locations(ctx,caCertLoc,0) !=
+                SSL_SUCCESS) {
+            printf("Error loading %s, please check the file.\n", caCertLoc);
+            exit(1);
+        }
+        /* Load server certificates */
+        if (wolfSSL_CTX_use_certificate_file(ctx, servCertLoc, SSL_FILETYPE_PEM) !=
+                                                                     SSL_SUCCESS) {
+            printf("Error loading %s, please check the file.\n", servCertLoc);
+            exit(1);
+        }
+        /* Load server Keys */
+        if (wolfSSL_CTX_use_PrivateKey_file(ctx, servKeyLoc,
+                    SSL_FILETYPE_PEM) != SSL_SUCCESS) {
+            printf("Error loading %s, please check the file.\n", servKeyLoc);
+            exit(1);
+        }
     }
 
 
