@@ -248,6 +248,8 @@ public:
                     if (packet[0] != 0) {
                         // write the incoming packet to the output stream.
                         write(interface, packet, length);
+                    } else {
+                        TunnelManager::log("Recieved empty control msg from client");
                     }
 
                     // there might be more incoming packets.
@@ -273,7 +275,14 @@ public:
                         // send empty control messages.
                         packet[0] = 0;
                         for (int i = 0; i < 3; ++i) {
-                            wolfSSL_send(ssl, packet, 1, MSG_NOSIGNAL);
+                            int sentData = wolfSSL_send(tunnel.second, packet, 1, MSG_NOSIGNAL);
+                            if(sentData < 0) {
+                                TunnelManager::log("sentData < 0");
+                                int e = wolfSSL_get_error(ssl, 0);
+                                printf("error = %d, %s\n", e, wolfSSL_ERR_reason_error_string(e));
+                            } else {
+                                TunnelManager::log("sent empty control packet");
+                            }
                         }
 
                         // switch to sending.
