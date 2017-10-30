@@ -62,8 +62,9 @@ public:
 
         manager = new IPManager(cliParams.virtualNetworkIp + '/' + cliParams.networkMask,
                                 6); // IP pool init size
-        tunMgr  = new TunnelManager("data/pid_list.dat",
-                                    "data/tun_list.dat");
+        tunMgr  = new TunnelManager("/data/pid_list.dat",
+                                    "/data/tun_list.dat",
+                                    "/data/save_tun_list.txt");
 
         // Enable IP forwarding
         tunMgr->execTerminalCommand("echo 1 > /proc/sys/net/ipv4/ip_forward");

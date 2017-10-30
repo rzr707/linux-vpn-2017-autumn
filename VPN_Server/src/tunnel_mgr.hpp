@@ -8,6 +8,7 @@
 #include <chrono>   // std::chrono::system_clock::now()
 #include <queue>
 #include <set>
+#include <string.h>
 
 #include <unistd.h> // pid_t
 #include <signal.h> // SIGINT
@@ -22,7 +23,9 @@ class TunnelManager {
 private:
     const char*        pidListFilename;
     const char*        tunListFilename;
+    const char*        SaveTunListFilename;
     std::fstream       file;
+    std::fstream       save_tun_file;
     std::queue<size_t> tunQueue;
     std::set<size_t>   tunSet;
     size_t             tunNumber;
@@ -32,15 +35,19 @@ public:
     TunnelManager(TunnelManager& that) = delete;
 
     TunnelManager
-    (const char* pidListFilename, const char* tunListFilename)
+    (const char* pidListFilename, const char* tunListFilename, const char* inSaveTunListFilename)
         : pidListFilename(pidListFilename),
           tunListFilename(tunListFilename),
+          SaveTunListFilename(inSaveTunListFilename),
           tunNumber(0)
-    { }
+    { 
+        DelTunFromFile("", true);
+    }
 
     ~TunnelManager() {
         cleanFile(pidListFilename);
         cleanFile(tunListFilename);
+        cleanFile(SaveTunListFilename);
     }
 
     void write(const std::string& filename,
@@ -109,6 +116,7 @@ public:
         std::string t = "ip link delete " + tunStr;
                 // "ip link set dev " + tunStr + " down";
         execTerminalCommand(t.c_str());
+        DelTunFromFile(tunStr);    
     }
 
     void closeTunNumber(const size_t& num) {
@@ -208,12 +216,62 @@ public:
         std::string ifconfig = "ifconfig " + tunName + " " + serverTunAddr +
                           " dstaddr " + clientTunAddr + " up";
         execTerminalCommand(ifconfig);
+        SaveTunToFile(tunName);
         /*
         // write tunnel to created tunnels list:
         write(getTunListFilename(), tunName);
         // write process pid to created processes list:
         write(getPidListFilename(), to_string(getpid()));
         */
+    }
+    
+    void SaveTunToFile(const std::string& TunName)
+    {
+        save_tun_file.open(SaveTunListFilename, std::ios_base::out | std::ios_base::app);
+        if(!save_tun_file.is_open()) {
+            throw std::runtime_error(std::string() + "TunnelManager::SaveTunToFile - Could not open file to save tun information");
+        }
+        
+        save_tun_file << TunName << std::endl;
+        save_tun_file.close();
+    }
+    
+    void DelTunFromFile(const std::string& TunName, bool ClearAllData = false)
+    {
+        int tun_length = 0;
+        int position = 0;
+        std::string line;
+        
+        save_tun_file.open(SaveTunListFilename, std::ios::in | std::ios::out);
+        if(!save_tun_file.is_open()) {
+            throw std::runtime_error(std::string() + "TunnelManager::SaveTunToFile - Could not open file to save tun information");
+        }
+        
+        if(!ClearAllData)
+        {
+            while(getline(save_tun_file, line)) {  
+                if(line[0] != ' ' && !strcmp(line.c_str(), TunName.c_str()))
+                {
+                    save_tun_file.seekg(position);
+                    tun_length = line.length();
+                    while(tun_length--)
+                        save_tun_file << ' ';
+                    break;
+                }
+                else
+                    position+=line.length()+1;
+            }
+        }
+        else
+        {
+            while(getline(save_tun_file, line)) 
+                if(line[0] != ' ')
+                    execTerminalCommand("ip link delete " + line);
+                
+            cleanFile(SaveTunListFilename);
+        }
+        
+        save_tun_file.close();
     }
 
 };
