@@ -193,7 +193,7 @@ public:
                 sentParameters =
                     wolfSSL_send(tunnel.second, cliParams.parametersToSend,
                                  sizeof(cliParams.parametersToSend),
-                                 0);
+                                 MSG_NOSIGNAL);
 
                     if(sentParameters < 0) {
                     TunnelManager::log("Error sending parameters: " +
@@ -222,7 +222,14 @@ public:
                 int length = read(interface, packet, sizeof(packet));
                 if (length > 0) {
                     // write the outgoing packet to the tunnel.
-                    wolfSSL_send(tunnel.second, packet, length, MSG_NOSIGNAL);
+                    int sentData = wolfSSL_send(tunnel.second, packet, length, MSG_NOSIGNAL);
+                    if(sentData < 0) {
+                        TunnelManager::log("sentData < 0");
+                        int e = wolfSSL_get_error(ssl, 0);
+                        printf("error = %d, %s\n", e, wolfSSL_ERR_reason_error_string(e));
+                    } else {
+                        TunnelManager::log("outgoing packet from interface to the tunnel.");
+                    }
 
                     // there might be more outgoing packets.
                     idle = false;
@@ -247,7 +254,13 @@ public:
                     // ignore control messages, which start with zero.
                     if (packet[0] != 0) {
                         // write the incoming packet to the output stream.
-                        write(interface, packet, length);
+                        int sentData = write(interface, packet, length);
+                        if(sentData < 0) {
+                            TunnelManager::log("write(interface, packet, length) < 0");
+                        } else {
+                            TunnelManager::log("written the incoming packet to the output stream..");
+                        }
+
                     } else {
                         TunnelManager::log("Recieved empty control msg from client");
                     }
@@ -482,6 +495,7 @@ public:
         /* set the session ssl to client connection port */
         wolfSSL_set_fd(ssl, tunnel);
         wolfSSL_set_using_nonblock(ssl, 1);
+
 
         if (wolfSSL_accept(ssl) != SSL_SUCCESS) {
             int e = wolfSSL_get_error(ssl, 0);
