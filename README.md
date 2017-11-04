@@ -1,6 +1,6 @@
 # VPN Client & Server
 
-####This is a VPN application that provides creating virtual private network between client and server. The server must be located in safe part of network. If so, it is guaranteed that between client and server will be established safe connection via DTLS 1.2
+This is an VPN application that provides creating virtual private network between client and server. The server must be located in safe part of network. If so, it is guaranteed that between client and server will be established safe connection via DTLS 1.2
 
 # Server side
 
