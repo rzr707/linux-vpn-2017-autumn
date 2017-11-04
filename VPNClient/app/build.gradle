@@ -31,7 +31,7 @@ android {
 
     sourceSets {
         // wolfSSL JNI Java source files are added here
-        main.java.srcDirs += 'src/main/../../../wolfssljni/src/java'
+        main.java.srcDirs += 'src/main/../../../../wolfssljni/src/java'
     }
 }
 
