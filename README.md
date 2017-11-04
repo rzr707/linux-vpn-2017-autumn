@@ -17,7 +17,7 @@ The server application is runned like daemon (service). It has to be installed o
 
    * $ cd wolfssl/
    * $ ./autogen.sh
-   * $ make
+   * $ make --enable-dtls
    * $ make check
    * $ sudo make install
 
