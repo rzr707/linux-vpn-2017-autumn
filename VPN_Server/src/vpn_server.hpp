@@ -508,9 +508,9 @@ public:
     }
 
     void initSsl() {
-        char caCertLoc[] = "/home/user/Ssl_Server/certs/ca_cert.pem";
-        char servCertLoc[] = "/home/user/Ssl_Server/certs/server-cert.pem";
-        char servKeyLoc[] = "/home/user/Ssl_Server/certs/server-key.pem";
+        char caCertLoc[]   = "certs/ca_cert.pem";
+        char servCertLoc[] = "certs/server-cert.pem";
+        char servKeyLoc[]  = "certs/server-key.pem";
         /* Initialize wolfSSL */
         wolfSSL_Init();
 
