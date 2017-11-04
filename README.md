@@ -26,6 +26,8 @@ The server application is runned like daemon (service). It has to be installed o
    * $ cd VPN_Server/
    * $ make
 
+4. (Optional) You can generate your own certificates and keys. Use openssl for this. When generated, put your new files to VPN_Server/certs/ directory, replacing the old ones.
+
 ## Server usage:
 Server must be runned from superuser account. You can run server with this parameters:
 ./VPN_Server 8000 test -a 10.0.0.0 8 -d 8.8.8.8 -r 0.0.0.0 0 -i wlan0
