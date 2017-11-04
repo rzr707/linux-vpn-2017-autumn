@@ -68,9 +68,9 @@ public class VpnConnection implements Runnable {
     private static final long RECEIVE_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(200);
 
     /**
-     * Time between polling the VPN interface for new traffic, since it's non-blocking.
+     * Time between polling the VPN interface for new traffic
      */
-    private static final long IDLE_INTERVAL_MS = TimeUnit.MILLISECONDS.toMillis(20);
+    private static final long IDLE_INTERVAL_MS = TimeUnit.MILLISECONDS.toMillis(20); // 20 by default
     private static final int MAX_HANDSHAKE_ATTEMPTS = 50;
 
     private final android.net.VpnService mService;

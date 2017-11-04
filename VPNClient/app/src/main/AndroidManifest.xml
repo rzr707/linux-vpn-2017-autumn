@@ -18,7 +18,7 @@ package="eu.freecluster.blog_vano.user.vpnclient">
 
 <uses-sdk android:minSdkVersion="14"/>
 
-<application android:label="@string/app">
+<application android:label="@string/app" android:icon="@mipmap/ic_launcher">
 
     <activity android:name="eu.freecluster.blog_vano.user.vpnclient.VpnClient"
         android:configChanges="orientation|keyboardHidden">
