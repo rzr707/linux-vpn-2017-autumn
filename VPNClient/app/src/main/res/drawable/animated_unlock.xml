@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<animated-vector android:drawable="@drawable/lock"
+    xmlns:android="http://schemas.android.com/apk/res/android">
+    <target
+        android:name="lockEar"
+        android:animation="@animator/ic_redcolor_animator" />
+    <target
+        android:name="lockBody"
+        android:animation="@animator/ic_redcolor_animator" />
+    <target
+        android:name="lockEarGroup"
+        android:animation="@animator/ic_unlock_animator"
+        />
+</animated-vector>
