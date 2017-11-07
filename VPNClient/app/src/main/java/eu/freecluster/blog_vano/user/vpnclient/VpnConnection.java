@@ -84,6 +84,11 @@ public class VpnConnection implements Runnable {
     private OnEstablishListener mOnEstablishListener;
 
     /**
+     * This boolean controls recv-thread execution. If false, thread will be terminated.
+     */
+    private boolean connectedToServer = false;
+
+    /**
      * The main class where secure connection with server will be established and packets
      * will be forwarded from android device and into it.
      *
@@ -185,7 +190,7 @@ public class VpnConnection implements Runnable {
         }
 
         ParcelFileDescriptor iface = null;
-        boolean connected = false;
+        connectedToServer = false;
         // Create a DatagramSocket as the VPN tunnel.
         try  {
             DatagramSocket dgramSock = new DatagramSocket();
@@ -234,7 +239,7 @@ public class VpnConnection implements Runnable {
             showPeer(ssl);
 
             // Now we are connected. Set the flag.
-            connected = true;
+            connectedToServer = true;
 
             iface = handshake(ssl);
             FileInputStream  in = new FileInputStream(iface.getFileDescriptor());
@@ -293,8 +298,9 @@ public class VpnConnection implements Runnable {
                     Log.e(getTag(), "Unable to close interface", e);
                 }
             }
+            connectedToServer = false;
         }
-        return connected;
+        return connectedToServer;
     }
 
     /**
@@ -448,7 +454,7 @@ public class VpnConnection implements Runnable {
 
         @Override
         public void run() {
-            while(true) { // @todo: make thread to stop working after user-disconnect
+            while(connectedToServer) { // @todo: make thread to stop working after user-disconnect
                     int len = ssl.read(buf.array(), MAX_PACKET_SIZE);
                     if(len > 0) {
                         if(buf.get(0) != 0) {
