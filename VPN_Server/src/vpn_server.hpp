@@ -30,14 +30,6 @@
 #include <wolfssl/ssl.h>
 #include <sys/time.h>
 
-/* costumes for select_ret to wear */
-enum {
-    TEST_SELECT_FAIL,
-    TEST_TIMEOUT,
-    TEST_RECV_READY,
-    TEST_ERROR_READY
-};
-
 /**
  * @brief VPNServer class\r\n
  * How to run:\r\n
@@ -153,14 +145,13 @@ public:
     void createNewConnection() {
         mutex.lock();
         // create ssl from sslContext:
-        WOLFSSL* ssl = nullptr;
         // run commands via unix terminal (needs sudo)
-        in_addr_t serTunAddr = manager->getAddrFromPool();
-        in_addr_t cliTunAddr = manager->getAddrFromPool();
+        in_addr_t serTunAddr    = manager->getAddrFromPool();
+        in_addr_t cliTunAddr    = manager->getAddrFromPool();
         std::string serverIpStr = IPManager::getIpString(serTunAddr);
         std::string clientIpStr = IPManager::getIpString(cliTunAddr);
-        size_t tunNumber     = tunMgr->getTunNumber();
-        std::string tunStr   = "tun" + std::to_string(tunNumber);
+        size_t tunNumber        = tunMgr->getTunNumber();
+        std::string tunStr      = "tun" + std::to_string(tunNumber);
 
         if(serTunAddr == 0 || cliTunAddr == 0) {
             TunnelManager::log("No free IP addresses. Tunnel will not be created.",
@@ -181,7 +172,7 @@ public:
 
         // wait for a tunnel.
         std::pair<int, WOLFSSL*> tunnel;
-        while ((tunnel = get_tunnel(port.c_str(), cliParams.secretPassword.c_str(), ssl)).first != -1
+        while ((tunnel = get_tunnel(port.c_str())).first != -1
                &&
                tunnel.second != nullptr) {
 
@@ -207,14 +198,9 @@ public:
                     if(sentParameters < 0) {
                     TunnelManager::log("Error sending parameters: " +
                                        std::to_string(sentParameters));
-                    int e = wolfSSL_get_error(ssl, 0);
+                    int e = wolfSSL_get_error(tunnel.second, 0);
                     printf("error = %d, %s\n", e, wolfSSL_ERR_reason_error_string(e));
                 }
-                /*
-                send(tunnel,
-                     cliParams.parametersToSend,
-                     sizeof(cliParams.parametersToSend),
-                     MSG_NOSIGNAL); */
             }
 
             // allocate the buffer for a single packet.
@@ -234,7 +220,7 @@ public:
                     int sentData = wolfSSL_send(tunnel.second, packet, length, MSG_NOSIGNAL);
                     if(sentData < 0) {
                         TunnelManager::log("sentData < 0");
-                        int e = wolfSSL_get_error(ssl, 0);
+                        int e = wolfSSL_get_error(tunnel.second, 0);
                         printf("error = %d, %s\n", e, wolfSSL_ERR_reason_error_string(e));
                     } else {
                         TunnelManager::log("outgoing packet from interface to the tunnel.");
@@ -300,7 +286,7 @@ public:
                             int sentData = wolfSSL_send(tunnel.second, packet, 1, MSG_NOSIGNAL);
                             if(sentData < 0) {
                                 TunnelManager::log("sentData < 0");
-                                int e = wolfSSL_get_error(ssl, 0);
+                                int e = wolfSSL_get_error(tunnel.second, 0);
                                 printf("error = %d, %s\n", e, wolfSSL_ERR_reason_error_string(e));
                             } else {
                                 TunnelManager::log("sent empty control packet");
@@ -323,8 +309,8 @@ public:
             TunnelManager::log("Client has been disconnected from tunnel [" +
                                tempTunStr + "]");
 
-            close(tunnel.first);
-            wolfSSL_set_fd(tunnel.second, 0);
+            //close(tunnel.first);
+            // wolfSSL_set_fd(tunnel.second, 0);
             wolfSSL_shutdown(tunnel.second);
             wolfSSL_free(tunnel.second);
             //
@@ -459,7 +445,7 @@ public:
     }
 
     std::pair<int, WOLFSSL*>
-    get_tunnel(const char *port, const char *secret, WOLFSSL* ssl) {
+    get_tunnel(const char *port) {
         // we use an IPv6 socket to cover both IPv4 and IPv6.
         int tunnel = socket(AF_INET6, SOCK_DGRAM, 0);
         int flag = 1;
@@ -497,6 +483,8 @@ public:
         // connect to the client
         connect(tunnel, (sockaddr *)&addr, addrlen);
 
+        WOLFSSL* ssl;
+
         /* Create the WOLFSSL Object */
         if ((ssl = wolfSSL_new(ctx)) == NULL) {
             printf("wolfSSL_new error.\n");
@@ -507,8 +495,9 @@ public:
         wolfSSL_set_fd(ssl, tunnel);
         wolfSSL_set_using_nonblock(ssl, 1);
 
-        while(wolfSSL_accept(ssl) != WOLFSSL_SUCCESS) {
-            std::this_thread::sleep_for(std::chrono::microseconds(100000));
+        if(wolfSSL_accept(ssl) != WOLFSSL_SUCCESS) {
+            wolfSSL_free(ssl);
+            std::pair<int, WOLFSSL*>(-1, nullptr);
         }
 
         return std::pair<int, WOLFSSL*>(tunnel, ssl);
