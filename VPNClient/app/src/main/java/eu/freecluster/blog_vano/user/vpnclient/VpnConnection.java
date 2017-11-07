@@ -30,7 +30,13 @@ import java.io.DataOutputStream;
 
 import com.wolfssl.*;
 
-
+/**
+ * @todo:
+ * 1) Activate wakelock on connect to prevent enabling sleeping mode,
+ *    When disconnected - deactivate it.
+ * 2) On disconnect send special packet that signalize client manual disconnect
+ * 3) Add receiving timeout. If reached - make force disconnect.
+ */
 public class VpnConnection implements Runnable {
     /**
      * Load wolfSSL shared JNI library:
@@ -70,7 +76,7 @@ public class VpnConnection implements Runnable {
     /**
      * Time between polling the VPN interface for new traffic
      */
-    private static final long IDLE_INTERVAL_MS = TimeUnit.MILLISECONDS.toMillis(20); // 20 by default
+    private static final long IDLE_INTERVAL_MS = TimeUnit.MILLISECONDS.toMillis(4); // 20 by default
     private static final int MAX_HANDSHAKE_ATTEMPTS = 50;
 
     private final android.net.VpnService mService;
@@ -255,17 +261,20 @@ public class VpnConnection implements Runnable {
             ByteBuffer packet = ByteBuffer.allocate(MAX_PACKET_SIZE);
 
             /* Here Runnable instance will be created.
-             * It will listen in new thread for
-             * incoming packets from outside (dtls)
+             * It will be listening for incoming packets
+             * from outside (dtls) in a new thread
              */
             DgramReaderRunnable r = new DgramReaderRunnable(dgramSock, ssl, out);
-            Thread reciever = new Thread(r);
-            reciever.start();
+            Thread receiver = new Thread(r);
+            receiver.start();
 
             dgramSock.setSoTimeout(0);
 
             // Here packets are forwarding from tunnel to secured socket:
             int ctrlPktCounter = 0;
+            // Calculate when control messages will be sent (after 'maxLimit' times of 'read')
+            int maxLimit = (int) (3000 / IDLE_INTERVAL_MS);
+
             while (true) {
                     int len = in.read(packet.array());
                     if (len > 0) {
@@ -274,7 +283,7 @@ public class VpnConnection implements Runnable {
                         packet.clear();
                         Log.i("SSL_WRITE_SUCCESS", "Written " + len + " bytes of data.");
                     }
-                    if(++ctrlPktCounter == 150) {
+                    if(++ctrlPktCounter > maxLimit) {
                         ctrlPktCounter = 0;
                         packet.put((byte) 0).limit(1);
                         for (int i = 0; i < 3; ++i) {
