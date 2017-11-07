@@ -28,6 +28,15 @@
 #include <ifaddrs.h>
 #include <wolfssl/options.h>
 #include <wolfssl/ssl.h>
+#include <sys/time.h>
+
+/* costumes for select_ret to wear */
+enum {
+    TEST_SELECT_FAIL,
+    TEST_TIMEOUT,
+    TEST_RECV_READY,
+    TEST_ERROR_READY
+};
 
 /**
  * @brief VPNServer class\r\n
@@ -177,17 +186,16 @@ public:
                tunnel.second != nullptr) {
 
             TunnelManager::log("New client connected to [" + tunStr + "]");
+            std::string tempTunStr = tunStr;
 
             /* if client is connected then run another instance of connection
              * in a new thread: */
             std::thread thr(&VPNServer::createNewConnection, this);
             thr.detach();
 
-            std::string tempTunStr = tunStr;
-
-
             // put the tunnel into non-blocking mode.
             fcntl(tunnel.first, F_SETFL, O_NONBLOCK);
+
             int sentParameters = -12345;
             // send the parameters several times in case of packet loss.
             for (int i = 0; i < 3; ++i) {
@@ -476,6 +484,7 @@ public:
         // receive packets till the secret matches.
         char packet[1024];
         socklen_t addrlen;
+
             addrlen = sizeof(addr);
             int n = recvfrom(tunnel, packet, sizeof(packet), 0,
                     (sockaddr *)&addr, &addrlen);
@@ -483,6 +492,7 @@ public:
                 return std::pair<int, WOLFSSL*>(-1, nullptr);
             }
             packet[n] = 0;
+
 
         // connect to the client
         connect(tunnel, (sockaddr *)&addr, addrlen);
@@ -497,12 +507,8 @@ public:
         wolfSSL_set_fd(ssl, tunnel);
         wolfSSL_set_using_nonblock(ssl, 1);
 
-
-        if (wolfSSL_accept(ssl) != SSL_SUCCESS) {
-            int e = wolfSSL_get_error(ssl, 0);
-            printf("error = %d, %s\n", e, wolfSSL_ERR_reason_error_string(e));
-            printf("SSL_accept failed.\n");
-            exit(1);
+        while(wolfSSL_accept(ssl) != WOLFSSL_SUCCESS) {
+            std::this_thread::sleep_for(std::chrono::microseconds(100000));
         }
 
         return std::pair<int, WOLFSSL*>(tunnel, ssl);
@@ -539,8 +545,6 @@ public:
             exit(1);
         }
     }
-
-
 };
 
 #endif // VPN_SERVER_HPP
