@@ -2,6 +2,7 @@ package eu.freecluster.blog_vano.user.vpnclient;
 
 import android.app.Activity;
 import android.content.Context;
+import android.content.pm.ActivityInfo;
 import android.graphics.drawable.AnimatedVectorDrawable;
 import android.os.Bundle;
 
@@ -24,7 +25,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 
 public class VpnClient extends Activity {
-    public static byte[] caBuff;
     private boolean isConnected = false;
     private String serverAddress;
     private String serverPort;
@@ -46,6 +46,8 @@ public class VpnClient extends Activity {
         String SERVER_ADDRESS = "server.address";
         String SERVER_PORT = "server.port";
         String SHARED_SECRET = "shared.secret";
+        String SPINNER_POSITION = "spinner.position";
+        String BUTTON_STATE = "button.state";
     }
 
     @Override
@@ -53,21 +55,36 @@ public class VpnClient extends Activity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.form);
 
+        // forbid landscape screen orientation:
+        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+
         serverSpinner   = (Spinner) findViewById(R.id.serverSpinner);
         buttonImageView = (ImageView) findViewById(R.id.buttonImageView);
-
 
         serverSpinner.setAdapter(new ServerSpinnerAdapter(VpnClient.this,
                 R.layout.custom_spinner_object,
                 countries.getCountriesNames()));
 
+        // Load preferences, such like chosen server and button state:
         final SharedPreferences prefs = getSharedPreferences(Prefs.NAME, MODE_PRIVATE);
+        serverSpinner.setSelection(prefs.getInt(Prefs.SPINNER_POSITION, 0));
         serverAddress = prefs.getString(Prefs.SERVER_ADDRESS,
                 countries.getCountriesNames()[serverSpinner.getSelectedItemPosition()]);
         serverPort = prefs.getString(Prefs.SERVER_PORT,
                 countries.getServerPorts()[serverSpinner.getSelectedItemPosition()]);
+        isConnected = prefs.getBoolean(Prefs.BUTTON_STATE, false);
 
         sharedSecret = "test"; // @todo: remove shared secret
+
+        AnimatedVectorDrawable drawable
+                = (AnimatedVectorDrawable) getDrawable(!isConnected ?
+                R.drawable.animated_unlock :
+                R.drawable.animated_lock);
+        buttonImageView.setImageDrawable(drawable);
+        drawable.start();
+        buttonImageView.refreshDrawableState();
+
+
 
         Log.i("ABSOLUTE_PATH", getApplicationContext().getFilesDir().getAbsolutePath());
 
@@ -79,6 +96,8 @@ public class VpnClient extends Activity {
                                 .putString(Prefs.SERVER_ADDRESS, countries.getIpAddresses()[serverSpinner.getSelectedItemPosition()])
                                 .putString(Prefs.SERVER_PORT, countries.getServerPorts()[serverSpinner.getSelectedItemPosition()])
                                 .putString(Prefs.SHARED_SECRET, "test")
+                                .putInt(Prefs.SPINNER_POSITION, serverSpinner.getSelectedItemPosition())
+                                .putBoolean(Prefs.BUTTON_STATE, !isConnected)
                                 .commit();
 
                         Intent intent = android.net.VpnService.prepare(VpnClient.this);
@@ -94,6 +113,7 @@ public class VpnClient extends Activity {
                     // start lock/unlock animation:
                     startLockAnimation(isConnected, buttonImageView);
                     isConnected = !isConnected;
+                    prefs.edit().putBoolean(Prefs.BUTTON_STATE, isConnected).commit();
             }
         });
 
