@@ -1,6 +1,7 @@
 package eu.freecluster.blog_vano.user.vpnclient;
 
 import android.app.Activity;
+import android.content.Context;
 import android.graphics.drawable.AnimatedVectorDrawable;
 import android.os.Bundle;
 
@@ -13,9 +14,13 @@ import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Arrays;
 
 public class VpnClient extends Activity {
+    public static byte[] caBuff;
     private boolean isConnected = false;
     private TextView serverAddress;
     private TextView serverPort;
@@ -43,6 +48,8 @@ public class VpnClient extends Activity {
         serverAddress.setText(prefs.getString(Prefs.SERVER_ADDRESS, ""));
         serverPort.setText(prefs.getString(Prefs.SERVER_PORT, ""));
         sharedSecret.setText(prefs.getString(Prefs.SHARED_SECRET, ""));
+
+        Log.i("ABSOLUTE_PATH", getApplicationContext().getFilesDir().getAbsolutePath());
 
         buttonImageView.setOnClickListener(new View.OnClickListener() {
             @Override

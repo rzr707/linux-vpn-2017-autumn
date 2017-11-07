@@ -7,20 +7,45 @@ package eu.freecluster.blog_vano.user.vpnclient;
 import static java.nio.charset.StandardCharsets.US_ASCII;
 
 import android.app.PendingIntent;
+import android.content.Context;
+import android.net.ConnectivityManager;
 import android.os.ParcelFileDescriptor;
 import android.util.Log;
 
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.net.DatagramSocket;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.net.SocketException;
 import java.nio.ByteBuffer;
 import java.nio.channels.DatagramChannel;
+import java.util.Arrays;
 import java.util.concurrent.TimeUnit;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+
+import com.wolfssl.*;
+
 
 public class VpnConnection implements Runnable {
+    /**
+     * Load wolfSSL shared JNI library:
+     */
+    static {
+        System.loadLibrary("wolfssl");
+        System.loadLibrary("wolfssljni");
+    }
+
+    WolfSSL        sslLib             = null;
+    WolfSSLContext sslCtx             = null;
+    WolfSSLSession ssl                = null;
+    DataInputStream dtlsInputStream   = null;
+    DataOutputStream dtlsOutputStream = null;
+
     /**
      * Callback interface to let the {@link CustomVpnService} know about new connections
      * and update the foreground notification with connection status
@@ -30,7 +55,7 @@ public class VpnConnection implements Runnable {
     }
 
     /** Maximum packet size is constrained by the MTU, which is given as a signed short. */
-    private static final int MAX_PACKET_SIZE = Short.MAX_VALUE;
+    private static final int MAX_PACKET_SIZE = Short.MAX_VALUE / 2 - 1;
 
     /** Time to wait in between losing the connection and retrying. */
     private static final long RECONNECT_WAIT_MS = TimeUnit.SECONDS.toMillis(3);
@@ -43,14 +68,9 @@ public class VpnConnection implements Runnable {
     private static final long RECEIVE_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(200);
 
     /**
-     * Time between polling the VPN interface for new traffic, since it's non-blocking.
+     * Time between polling the VPN interface for new traffic
      */
-    private static final long IDLE_INTERVAL_MS = TimeUnit.MILLISECONDS.toMillis(50);
-
-    /**
-     * Number of periods of length {@IDLE_INTERVAL_MS} to wait before declaring the handshake a
-     * complete and abject failure.
-     */
+    private static final long IDLE_INTERVAL_MS = TimeUnit.MILLISECONDS.toMillis(20); // 20 by default
     private static final int MAX_HANDSHAKE_ATTEMPTS = 50;
 
     private final android.net.VpnService mService;
@@ -63,14 +83,69 @@ public class VpnConnection implements Runnable {
     private PendingIntent mConfigureIntent;
     private OnEstablishListener mOnEstablishListener;
 
+    /**
+     * The main class where secure connection with server will be established and packets
+     * will be forwarded from android device and into it.
+     *
+     * @param service - an instance of android VPN Service
+     * @param connectionId - connection ID
+     * @param serverName   - server name
+     * @param serverPort   - port to connect
+     * @param sharedSecret - @todo: remove this, not used anymore
+     * @param appContext   - application context, needed for loading android assets
+     * @throws WolfSSLException - DTLS-specified exceptions
+     */
     public VpnConnection(final android.net.VpnService service, final int connectionId,
-                         final String serverName, final int serverPort, final byte[] sharedSecret) {
+                         final String serverName, final int serverPort, final byte[] sharedSecret,
+                         Context appContext) throws WolfSSLException {
+
+        /**
+         * Load CA certificate from android assets:
+         */
+        String text = "ca_cert.pem";
+        try {
+            Log.i("ASSETS_LIST",
+                    Arrays.toString(appContext.getAssets().list(""))
+            );
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        byte[] buffer = null;
+        InputStream is;
+        try {
+            is = appContext.getAssets().open(text);
+            int size = is.available();
+            buffer = new byte[size];
+            is.read(buffer);
+            is.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+
         mService = service;
         mConnectionId = connectionId;
 
         mServerName = serverName;
         mServerPort= serverPort;
         mSharedSecret = sharedSecret;
+
+        sslLib = new WolfSSL();
+        sslLib.setLoggingCb(new MyLoggingCallback()); // @todo: remove this (useless)
+
+        // Configure SSL Context for DTLS connections:
+        sslCtx = new WolfSSLContext(WolfSSL.DTLSv1_2_ClientMethod());
+
+        int status = 0;
+        try {
+            status = sslCtx.loadVerifyBuffer(buffer, buffer.length, WolfSSL.SSL_FILETYPE_PEM);
+        } catch (WolfSSLJNIException e) {
+            e.printStackTrace();
+        }
+        if(status != WolfSSL.SSL_SUCCESS) {
+            Log.e("WOLFSSL_SSL_FAILURE", "Failed to load ca certificate");
+            System.exit(1);
+        }
     }
 
     /**
@@ -79,7 +154,6 @@ public class VpnConnection implements Runnable {
     public void setConfigureIntent(PendingIntent intent) {
         mConfigureIntent = intent;
     }
-
     public void setOnEstablishListener(OnEstablishListener listener) {
         mOnEstablishListener = listener;
     }
@@ -88,20 +162,9 @@ public class VpnConnection implements Runnable {
     public void run() {
         try {
             Log.i(getTag(), "Starting");
-
-            // If anything needs to be obtained using the network, get it now.
-            // This greatly reduces the complexity of seamless handover, which
-            // tries to recreate the tunnel without shutting down everything.
-            // In this demo, all we need to know is the server address.
             final SocketAddress serverAddress = new InetSocketAddress(mServerName, mServerPort);
-
-            // Try to create the tunnel several times.
-            for (int attempt = 0; attempt < 10; ++attempt) {
-                // Reset the counter if we were connected.
-                if (run(serverAddress)) {
-                    attempt = 0;
-                }
-
+            // Try to create the tunnel for 1 time:
+            if(run(serverAddress)) { // @TODO: Make check internet access through ConnectivityManager
                 // Sleep for a while. This also checks if we got interrupted.
                 Thread.sleep(3000);
             }
@@ -113,110 +176,111 @@ public class VpnConnection implements Runnable {
 
     private boolean run(SocketAddress server)
             throws IOException, InterruptedException, IllegalArgumentException {
+
+        // Create SSL Session instance:
+        try {
+            ssl = new WolfSSLSession(sslCtx);
+        } catch (WolfSSLException e) {
+            e.printStackTrace();
+        }
+
         ParcelFileDescriptor iface = null;
         boolean connected = false;
-        // Create a DatagramChannel as the VPN tunnel.
-        try (DatagramChannel tunnel = DatagramChannel.open()) {
-
+        // Create a DatagramSocket as the VPN tunnel.
+        try  {
+            DatagramSocket dgramSock = new DatagramSocket();
             // Protect the tunnel before connecting to avoid loopback.
-            if (!mService.protect(tunnel.socket())) {
+            if (!mService.protect(dgramSock)) {
                 throw new IllegalStateException("Cannot protect the tunnel");
             }
 
-            // Connect to the server.
-            tunnel.connect(server);
+            int status;
+            final InetAddress hostAddr = InetAddress.getByName(mServerName);
+            final InetSocketAddress serverAddress = new InetSocketAddress(hostAddr, mServerPort);
 
-            // For simplicity, we use the same thread for both reading and
-            // writing. Here we put the tunnel into non-blocking mode.
-            tunnel.configureBlocking(false);
+            status = ssl.dtlsSetPeer(serverAddress);
+            if (status != WolfSSL.SSL_SUCCESS) {
+                Log.e("WOLFSSL_DTLS_SET_PEER",
+                        "Failed to set DTLS peer");
+                throw new RuntimeException("dtlsSetPeerException");
+            }
 
-            // Authenticate and configure the virtual network interface.
-            iface = handshake(tunnel);
+            /* register callbacks: */
+            ConnectRecvCallback connCallback = new ConnectRecvCallback();
+            MyRecvCallback rcb = new MyRecvCallback();
+            MySendCallback scb = new MySendCallback();
+            MyIOCtx ioctx = new MyIOCtx(dtlsOutputStream, dtlsInputStream, dgramSock,
+                    hostAddr, mServerPort);
+
+            try {
+                sslCtx.setIORecv(connCallback);
+                sslCtx.setIOSend(scb);
+                ssl.setIOReadCtx(ioctx);
+                ssl.setIOWriteCtx(ioctx);
+            } catch (WolfSSLJNIException e) {
+                e.printStackTrace();
+            }
+            Log.i("IO_CALLBACKS_DTLS", "Registered I/O callbacks");
+
+            /* call wolfSSL_connect */
+            status = ssl.connect();
+            if (status != WolfSSL.SSL_SUCCESS) {
+                int err = ssl.getError(status);
+                String errString = sslLib.getErrorString(err);
+                Log.e("WOLFSSL_CONNECT", "Connect failed. Code: " + err +
+                        ", description: " + errString);
+                return false;
+            }
+            showPeer(ssl);
 
             // Now we are connected. Set the flag.
             connected = true;
 
-            // Packets to be sent are queued in this input stream.
-            FileInputStream in = new FileInputStream(iface.getFileDescriptor());
-
-            // Packets received need to be written to this output stream.
+            iface = handshake(ssl);
+            FileInputStream  in = new FileInputStream(iface.getFileDescriptor());
             FileOutputStream out = new FileOutputStream(iface.getFileDescriptor());
+
+            try {
+                sslCtx.setIORecv(rcb);
+            } catch (WolfSSLJNIException e) {
+                e.printStackTrace();
+            }
 
             // Allocate the buffer for a single packet.
             ByteBuffer packet = ByteBuffer.allocate(MAX_PACKET_SIZE);
 
-            // Timeouts:
-            //   - when data has not been sent in a while, send empty keepalive messages.
-            //   - when data has not been received in a while, assume the connection is broken.
-            long lastSendTime = System.currentTimeMillis();
-            long lastReceiveTime = System.currentTimeMillis();
+            /* Here Runnable instance will be created.
+             * It will listen in new thread for
+             * incoming packets from outside (dtls)
+             */
+            DgramReaderRunnable r = new DgramReaderRunnable(dgramSock, ssl, out);
+            Thread reciever = new Thread(r);
+            reciever.start();
 
-            // We keep forwarding packets till something goes wrong.
+            dgramSock.setSoTimeout(0);
+
+            // Here packets are forwarding from tunnel to secured socket:
+            int ctrlPktCounter = 0;
             while (true) {
-                // Assume that we did not make any progress in this iteration.
-                boolean idle = true;
-
-                // Read the outgoing packet from the input stream.
-                int length = in.read(packet.array());
-                if (length > 0) {
-                    // Write the outgoing packet to the tunnel.
-                    packet.limit(length);
-                    tunnel.write(packet);
-                    packet.clear();
-
-                    // There might be more outgoing packets.
-                    idle = false;
-                    lastReceiveTime = System.currentTimeMillis();
-                }
-
-                // Read the incoming packet from the tunnel.
-                length = tunnel.read(packet);
-                if (length > 0) {
-                    // Ignore control messages, which start with zero.
-                    if (packet.get(0) != 0) {
-                        // Write the incoming packet to the output stream.
-                        out.write(packet.array(), 0, length);
-                    } else {
-                        Log.i("INFO", "control message recieved"); // for debug purposes
-                        // 22.10.17: reset lastReceiveTime to prevent timeout exception and crash
-                        // because control packet is recieved:
-                        lastReceiveTime = System.currentTimeMillis();
+                    int len = in.read(packet.array());
+                    if (len > 0) {
+                        packet.limit(len);
+                        len = ssl.write(packet.array(), len);
+                        packet.clear();
+                        Log.i("SSL_WRITE_SUCCESS", "Written " + len + " bytes of data.");
                     }
-                    packet.clear();
-
-                    // There might be more incoming packets.
-                    idle = false;
-                    lastSendTime = System.currentTimeMillis();
-                }
-
-                // If we are idle or waiting for the network, sleep for a
-                // fraction of time to avoid busy looping.
-                if (idle) {
-                    Thread.sleep(IDLE_INTERVAL_MS);
-                    final long timeNow = System.currentTimeMillis();
-
-                    if (lastSendTime + KEEPALIVE_INTERVAL_MS <= timeNow) {
-                        // We are receiving for a long time but not sending.
-                        // Send empty control messages.
+                    if(++ctrlPktCounter == 150) {
+                        ctrlPktCounter = 0;
                         packet.put((byte) 0).limit(1);
                         for (int i = 0; i < 3; ++i) {
-                            Log.i("INFO", "Sent empty control message");
                             packet.position(0);
-                            tunnel.write(packet);
+                            ssl.write(packet.array(), 1);
+                            Log.i("CTRL_MSG_SENT", "Control message sent to server");
                         }
                         packet.clear();
-                        lastSendTime = timeNow;
-                        Log.i("TIMEOUT",
-                               "timeNow=" + timeNow +
-                               ", (lastReceiveTime + RECEIVE_TIMEOUT_MS)=" +
-                               (lastReceiveTime + RECEIVE_TIMEOUT_MS) +
-                               ", delta=" + (lastReceiveTime + RECEIVE_TIMEOUT_MS - timeNow));
-
-                    } else if (lastReceiveTime + RECEIVE_TIMEOUT_MS <= timeNow) {
-                        // We are sending for a long time but not receiving.
-                        throw new IllegalStateException("Timed out"); //this was causing app crash
                     }
-                }
+                Thread.sleep(IDLE_INTERVAL_MS);
+                Thread.yield();
             }
         } catch (SocketException e) {
             Log.e(getTag(), "Cannot use socket", e);
@@ -224,6 +288,7 @@ public class VpnConnection implements Runnable {
             if (iface != null) {
                 try {
                     iface.close();
+                    // ssl.freeSSL(); // @TODO: watch for memory leaks here
                 } catch (IOException e) {
                     Log.e(getTag(), "Unable to close interface", e);
                 }
@@ -232,13 +297,25 @@ public class VpnConnection implements Runnable {
         return connected;
     }
 
-    private ParcelFileDescriptor handshake(DatagramChannel tunnel)
+    /**
+     * The handshake method is needed to
+     * establish Point-to-Point tunnel connection with server.
+     * Here the configuration data will be received from server, such as
+     * client's tunnel IP address, packet MTU and routing rules.
+     * @param ssl - current SSL (DTLS) session object
+     * @return - configured ParcelFileDescriptor. It will be used like dev/tun file.
+     * @throws IOException - thrown if after MAX_HANDSHAKE_ATTEMPTS we did not get parameters
+     *                       from server;
+     * @throws InterruptedException
+     */
+    private ParcelFileDescriptor handshake(WolfSSLSession ssl)
             throws IOException, InterruptedException {
         // To build a secured tunnel, we should perform mutual authentication
         // and exchange session keys for encryption.
 
         // Allocate the buffer for handshaking.
         ByteBuffer packet = ByteBuffer.allocate(1024);
+        byte[] packetArr  = packet.array();
 
         // Control messages always start with zero.
         packet.put((byte) 0).put(mSharedSecret).flip();
@@ -246,7 +323,7 @@ public class VpnConnection implements Runnable {
         // Send the secret several times in case of packet loss.
         for (int i = 0; i < 3; ++i) {
             packet.position(0);
-            tunnel.write(packet);
+            ssl.write(packet.array(), 1024);
         }
         packet.clear();
 
@@ -256,15 +333,24 @@ public class VpnConnection implements Runnable {
 
             // Normally we should not receive random packets. Check that the first
             // byte is 0 as expected.
-            int length = tunnel.read(packet);
+            int length = ssl.read(packetArr, 1024);
             if (length > 0 && packet.get(0) == 0) {
-                return configure(new String(packet.array(), 1, length - 1, US_ASCII).trim());
+                return configure(new String(packetArr, 1, length - 1, US_ASCII).trim());
             }
         }
         throw new IOException("Timed out");
     }
 
-    private ParcelFileDescriptor configure(String parameters) throws IllegalArgumentException {
+    /**
+     * Method parses string for tunnel parameters.
+     * @param parameters - {@link String} with parameters to parse;
+     * @return - configured {@link ParcelFileDescriptor}
+     * @throws IllegalArgumentException - thrown if error occured while parsing parameters.
+     * @throws InterruptedException
+     */
+    private ParcelFileDescriptor configure(String parameters)
+            throws IllegalArgumentException, InterruptedException {
+        Log.i("VPN_CONNECTION_CONF", "Configure called.");
         // Configure a builder while parsing the parameters.
         android.net.VpnService.Builder builder = mService.new Builder();
         for (String parameter : parameters.split(" ")) {
@@ -273,6 +359,7 @@ public class VpnConnection implements Runnable {
                 switch (fields[0].charAt(0)) {
                     case 'm':
                         builder.setMtu(Short.parseShort(fields[1]));
+                        Log.i("MTU_SIZE", fields[1]);
                         break;
                     case 'a':
                         builder.addAddress(fields[1], Integer.parseInt(fields[2]));
@@ -303,11 +390,89 @@ public class VpnConnection implements Runnable {
                 mOnEstablishListener.onEstablish(vpnInterface);
             }
         }
+
         Log.i(getTag(), "New interface: " + vpnInterface + " (" + parameters + ")");
         return vpnInterface;
     }
 
     private final String getTag() {
         return VpnConnection.class.getSimpleName() + "[" + mConnectionId + "]";
+    }
+
+    /**
+     * The method shows peer cert information.
+     * @param ssl - SSL Session instance
+     */
+    private void showPeer(WolfSSLSession ssl) {
+        String altname;
+        try {
+
+            long peerCrtPtr = ssl.getPeerCertificate();
+
+            if (peerCrtPtr != 0) {
+                Log.i("SHOW_PEER","issuer : " +
+                        ssl.getPeerX509Issuer(peerCrtPtr));
+                Log.i("SHOW_PEER","subject : " +
+                        ssl.getPeerX509Subject(peerCrtPtr));
+
+                while( (altname = ssl.getPeerX509AltName(peerCrtPtr)) != null)
+                    Log.i("SHOW_PEER","altname = " + altname);
+            }
+
+            Log.i("SHOW_PEER", "SSL version is " + ssl.getVersion());
+            Log.i("SHOW_PEER", "SSL cipher suite is " + ssl.cipherGetName());
+
+        } catch (WolfSSLJNIException e) {
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * The {@link DgramReaderRunnable} class
+     * Lisens for DTLS Socket income. Whet it gets some bytes, they will
+     * be retranslated to tun file (iface).
+     */
+    class DgramReaderRunnable implements Runnable {
+        DatagramSocket   ds;
+        WolfSSLSession   ssl;
+        FileOutputStream out;
+        ByteBuffer       buf = ByteBuffer.allocate(MAX_PACKET_SIZE);
+
+        DgramReaderRunnable(DatagramSocket sock, WolfSSLSession ssl, FileOutputStream out)
+                throws SocketException {
+            ds = sock;
+            ds.setSoTimeout(0);
+            this.ssl = ssl;
+            this.out = out;
+        }
+
+        @Override
+        public void run() {
+            while(true) { // @todo: make thread to stop working after user-disconnect
+                    int len = ssl.read(buf.array(), MAX_PACKET_SIZE);
+                    if(len > 0) {
+                        if(buf.get(0) != 0) {
+                            try {
+                                out.write(buf.array(), 0, len);
+                            } catch (IOException e) {
+                                e.printStackTrace();
+                            }
+                        } else {
+                            Log.i("CONTROL_PKT", "Control zero packet received");
+                        }
+                        Log.i("SSL_READ_SUCCESS", "Read " + len + " bytes of data: ");
+                        //Log.i("SSL_READ_SUCCESS", "Read " + len + " bytes of data: " +
+                        //      new String(buf.array(), 0, len));
+                        buf.clear();
+                    }
+                try {
+                    Thread.sleep(IDLE_INTERVAL_MS);
+                    Thread.yield();
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+
+        }
     }
 }

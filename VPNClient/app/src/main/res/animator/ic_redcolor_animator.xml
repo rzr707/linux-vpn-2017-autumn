@@ -5,6 +5,5 @@
         android:duration="1500"
         android:propertyName="fillColor"
         android:valueFrom="#00aa00"
-        android:valueTo="#ff0000"
-        android:valueType="floatType"/>
+        android:valueTo="#ff0000" />
 </set>

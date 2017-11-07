@@ -1,0 +1,6 @@
+[submodule "wolfssljni"]
+	path = wolfssljni
+	url = git://github.com/wolfSSL/wolfssljni.git
+[submodule "wolfssl"]
+	path = wolfssl
+	url = git://github.com/wolfSSL/wolfssl.git

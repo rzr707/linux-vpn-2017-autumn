@@ -15,6 +15,8 @@ import android.util.Log;
 import android.util.Pair;
 import android.widget.Toast;
 
+import com.wolfssl.WolfSSLException;
+
 import java.io.IOException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -58,7 +60,11 @@ public class CustomVpnService /* renamed from 'VpnService' */ extends android.ne
             disconnect();
             return START_NOT_STICKY;
         } else {
-            connect();
+            try {
+                connect();
+            } catch (WolfSSLException e) {
+                e.printStackTrace();
+            }
             return START_STICKY;
         }
     }
@@ -77,7 +83,7 @@ public class CustomVpnService /* renamed from 'VpnService' */ extends android.ne
         return true;
     }
 
-    private void connect() {
+    private void connect() throws WolfSSLException {
         // Become a foreground service. Background services can be VPN services too, but they can
         // be killed by background check before getting a chance to receive onRevoke().
         updateForegroundNotification(R.string.connecting);
@@ -95,12 +101,13 @@ public class CustomVpnService /* renamed from 'VpnService' */ extends android.ne
             return;
         }
 
+
         // Kick off a connection.
         startConnection(new eu.freecluster.blog_vano.user.vpnclient.VpnConnection(
-                this, mNextConnectionId.getAndIncrement(), server, port, secret));
+                this, mNextConnectionId.getAndIncrement(), server, port, secret, getApplicationContext()));
     }
 
-    private void startConnection(final eu.freecluster.blog_vano.user.vpnclient.VpnConnection connection) {
+    private void startConnection(final eu.freecluster.blog_vano.user.vpnclient.VpnConnection connection) throws WolfSSLException {
         // Replace any existing connecting thread with the  new one.
         final Thread thread = new Thread(connection, "VpnConnectionThread");
         setConnectingThread(thread);
