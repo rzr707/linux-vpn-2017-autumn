@@ -9,8 +9,12 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.preference.PreferenceManager;
 import android.util.Log;
+import android.view.LayoutInflater;
 import android.view.View;
+import android.view.ViewGroup;
+import android.widget.ArrayAdapter;
 import android.widget.ImageView;
+import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -22,10 +26,20 @@ import java.util.Arrays;
 public class VpnClient extends Activity {
     public static byte[] caBuff;
     private boolean isConnected = false;
-    private TextView serverAddress;
-    private TextView serverPort;
-    private TextView sharedSecret;
+    private String serverAddress;
+    private String serverPort;
+    private String sharedSecret;
     private ImageView buttonImageView;
+    private Spinner   serverSpinner;
+
+
+    private final Countries countries = new Countries(new CountryObject[] {
+            new CountryObject(R.drawable.ic_flag_of_ukraine, "Home LAN server",
+                    "192.168.0.104", "8000"),
+            new CountryObject(R.drawable.ic_flag_of_the_united_states, "United States",
+                    "127.0.0.1", "8000")
+    });
+
 
     public interface Prefs {
         String NAME = "connection";
@@ -39,27 +53,32 @@ public class VpnClient extends Activity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.form);
 
-        serverAddress   = (TextView) findViewById(R.id.address);
-        serverPort      = (TextView) findViewById(R.id.port);
-        sharedSecret    = (TextView) findViewById(R.id.secret);
+        serverSpinner   = (Spinner) findViewById(R.id.serverSpinner);
         buttonImageView = (ImageView) findViewById(R.id.buttonImageView);
 
+
+        serverSpinner.setAdapter(new ServerSpinnerAdapter(VpnClient.this,
+                R.layout.custom_spinner_object,
+                countries.getCountriesNames()));
+
         final SharedPreferences prefs = getSharedPreferences(Prefs.NAME, MODE_PRIVATE);
-        serverAddress.setText(prefs.getString(Prefs.SERVER_ADDRESS, ""));
-        serverPort.setText(prefs.getString(Prefs.SERVER_PORT, ""));
-        sharedSecret.setText(prefs.getString(Prefs.SHARED_SECRET, ""));
+        serverAddress = prefs.getString(Prefs.SERVER_ADDRESS,
+                countries.getCountriesNames()[serverSpinner.getSelectedItemPosition()]);
+        serverPort = prefs.getString(Prefs.SERVER_PORT,
+                countries.getServerPorts()[serverSpinner.getSelectedItemPosition()]);
+
+        sharedSecret = "test"; // @todo: remove shared secret
 
         Log.i("ABSOLUTE_PATH", getApplicationContext().getFilesDir().getAbsolutePath());
 
         buttonImageView.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                if(correctInputs()) {
                     if (!isConnected) {
                         prefs.edit()
-                                .putString(Prefs.SERVER_ADDRESS, serverAddress.getText().toString())
-                                .putString(Prefs.SERVER_PORT, serverPort.getText().toString())
-                                .putString(Prefs.SHARED_SECRET, sharedSecret.getText().toString())
+                                .putString(Prefs.SERVER_ADDRESS, countries.getIpAddresses()[serverSpinner.getSelectedItemPosition()])
+                                .putString(Prefs.SERVER_PORT, countries.getServerPorts()[serverSpinner.getSelectedItemPosition()])
+                                .putString(Prefs.SHARED_SECRET, "test")
                                 .commit();
 
                         Intent intent = android.net.VpnService.prepare(VpnClient.this);
@@ -75,7 +94,6 @@ public class VpnClient extends Activity {
                     // start lock/unlock animation:
                     startLockAnimation(isConnected, buttonImageView);
                     isConnected = !isConnected;
-                }
             }
         });
 
@@ -103,55 +121,108 @@ public class VpnClient extends Activity {
         drawable.start();
     }
 
-    public boolean correctInputs() {
-        ArrayList<TextView> list = new ArrayList<TextView>();
-        list.add(serverAddress);
-        list.add(serverPort);
-        list.add(sharedSecret);
-
-        for(TextView view : list) {
-            if(isTextViewEmpty(view)) {
-                Toast.makeText(getApplicationContext(),
-                        "One of the fields is empty!",
-                        Toast.LENGTH_SHORT).show();
-                return false;
-            }
-        }
-
-        /**
-         * Port valid value test:
-         */
-        int port = Integer.parseInt(serverPort.getText().toString().trim());
-        Log.d("PORT TEST", "Port is " + port);
-        if(port < 1 || port > 0xFFFF) {
-            Toast.makeText(getApplicationContext(), "Incorrect port!", Toast.LENGTH_SHORT).show();
-            return false;
-        }
-
-        return true;
-    }
 
     // check textview input
     public boolean isTextViewEmpty(TextView tv) {
         return tv.getText().toString().trim().isEmpty();
     }
 
-    /*
-    @Override
-    public void onPause() {
-        super.onPause();
-        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(this);
-        SharedPreferences.Editor editor = preferences.edit();
-        editor.putBoolean("LockButtonStatus", isConnected);
-        editor.commit();
-        //editor.apply();
+    public class ServerSpinnerAdapter extends ArrayAdapter {
+        public ServerSpinnerAdapter(Context context, int textViewResourceId, String[] objects) {
+            super(context, textViewResourceId, objects);
+        }
+
+        public View getCustomView(int pos, View convertView, ViewGroup parent) {
+            // inflating the layout for the custom spinner:
+            LayoutInflater inflater = getLayoutInflater();
+            View layout = inflater.inflate(R.layout.custom_spinner_object,
+                    parent,
+                    false);
+
+            // declaring and typecasting the TextView in the inflated layout:
+            TextView tvServerCountry = (TextView) layout.findViewById(R.id.tvServerCountry);
+            // set the text using the array:
+            tvServerCountry.setText(countries.getCountriesNames()[pos]);
+
+            // declaring and typecasting the ImageView in the inflated layout:
+            ImageView img = (ImageView) layout.findViewById(R.id.imgServerCountry);
+            // set the pic using the array:
+            img.setImageResource(countries.getCountriesIds()[pos]);
+
+            /*
+             Here we can change font size and color:
+             */
+
+            return layout;
+        }
+
+        @Override
+        public View getDropDownView(int pos, View convertView, ViewGroup parent) {
+            return getCustomView(pos, convertView, parent);
+        }
+
+        @Override
+        public View getView(int pos, View convertView, ViewGroup parent) {
+            return getCustomView(pos, convertView, parent);
+        }
     }
 
-    @Override
-    public void onResume() {
-        super.onResume();
-        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(this);
-        isConnected = preferences.getBoolean("LockButtonStatus", false);
-        startLockAnimation(isConnected, buttonImageView);
-    }*/
+    public class Countries {
+        private CountryObject[] countries;
+
+        public Countries(CountryObject[] countries) {
+            this.countries = countries;
+        }
+
+        public Integer[] getCountriesIds() {
+            Integer[] result = new Integer[countries.length];
+            for(int i = 0; i < countries.length; ++i) {
+                result[i] = countries[i].getFlagId();
+            }
+            return result;
+        }
+
+        public String[] getCountriesNames() {
+            String[] result = new String[countries.length];
+            for(int i = 0; i < countries.length; ++i) {
+                result[i] = countries[i].getCountryName();
+            }
+            return result;
+        }
+
+        public String[] getIpAddresses() {
+            String[] result = new String[countries.length];
+            for(int i = 0; i < countries.length; ++i) {
+                result[i] = countries[i].getIpAddr();
+            }
+            return result;
+        }
+
+        public String[] getServerPorts() {
+            String[] result = new String[countries.length];
+            for(int i = 0; i < countries.length; ++i) {
+                result[i] = countries[i].getPort();
+            }
+            return result;
+        }
+    }
+
+    public class CountryObject {
+        private int    flagId;
+        private String countryName;
+        private String ipAddr;
+        private String port;
+
+        public CountryObject(int flagId, String countryName, String ipAddr, String port) {
+            this.flagId = flagId;
+            this.countryName = countryName;
+            this.ipAddr = ipAddr;
+            this.port = port;
+        }
+
+        public int getFlagId()         { return flagId;      }
+        public String getCountryName() { return countryName; }
+        public String getIpAddr()      { return ipAddr;      }
+        public String getPort()        { return port;        }
+    }
 }
