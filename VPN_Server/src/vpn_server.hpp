@@ -69,6 +69,13 @@ public:
         // Pick a range of private addresses and perform NAT over chosen network interface.
         std::string virtualLanAddress = cliParams.virtualNetworkIp + '/' + cliParams.networkMask;
         std::string physInterfaceName = cliParams.physInterface;
+
+        // Delete previous rule if server crashed:
+        std::string delPrevPostrouting
+                = "iptables -t nat -D POSTROUTING -s " + virtualLanAddress +
+                  " -o " + physInterfaceName + " -j MASQUERADE";
+        tunMgr->execTerminalCommand(delPrevPostrouting);
+
         std::string postrouting
                 = "iptables -t nat -A POSTROUTING -s " + virtualLanAddress +
                   " -o " + physInterfaceName + " -j MASQUERADE";
