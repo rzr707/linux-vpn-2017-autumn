@@ -8,7 +8,7 @@
  * TO DO (logs out information to output stream
  * defined by user (can be file or cout etc.)
  */
-class Log {
+class Logger {
 
 };
 

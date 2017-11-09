@@ -11,7 +11,6 @@
  * such as IP, DNS etc. and will be sent to client.\r\n
  */
 struct ClientParameters {
-    std::string secretPassword;
     std::string mtu;
     std::string virtualNetworkIp;
     std::string networkMask;

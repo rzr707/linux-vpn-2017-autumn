@@ -102,7 +102,7 @@ public:
     }
 
     void closeTunNumber(const size_t& num, const std::string tunPrefix = "vpn_") {
-        closeiftun(std::string() + tunPrefix +"tun" + std::to_string(num));
+        closeiftun(std::string() + tunPrefix + "tun" + std::to_string(num));
         tunQueue.push(num);
         tunSet.erase(num);
     }

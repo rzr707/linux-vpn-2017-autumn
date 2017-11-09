@@ -30,17 +30,16 @@ int main(int argc, char **argv) {
     if (argc < 3) {
         std::cout <<
         "* How to:\n"
-        "* " << argv[0] << " 8000 test -m 1400 -a 10.0.0.0 8 -d 8.8.8.8 -r 0.0.0.0 0 -i wlan0\n"
+        "* " << argv[0] << " 8000 -m 1400 -a 10.0.0.0 8 -d 8.8.8.8 -r 0.0.0.0 0 -i wlan0\n"
         "*  where: argv[i]\n"
         "* [1]      8000        - port to listen (mandatory)\n"
-        "* [2]      test        - secret phrase  (mandatory)\n"
-        "* [3, 4]   -m 1400     - packet mtu     (optional, default = 1400)\n"
-        "* [5, 6]   -a 10.0.0.0 - virtual network address (optional, default = 10.0.0.0)\n"
-        "* [7]      8           - virtual network mask    (optional, default = 8)\n"
-        "* [8, 9]   -d 8.8.8.8  - DNS-server address      (optional, default = 8.8.8.8)\n"
-        "* [10, 11] -r 0.0.0.0  - routing address         (optional, default = 0.0.0.0)\n"
-        "* [12]     0           - routing address mask    (optional, default = 0)\n"
-        "* [13, 14] -i wlan0    - physical network interface (opt., default = eth0)\n*\n"
+        "* [2, 3]   -m 1400     - packet mtu     (optional, default = 1400)\n"
+        "* [4, 5]   -a 10.0.0.0 - virtual network address (optional, default = 10.0.0.0)\n"
+        "* [6]      8           - virtual network mask    (optional, default = 8)\n"
+        "* [7, 8]   -d 8.8.8.8  - DNS-server address      (optional, default = 8.8.8.8)\n"
+        "* [9, 10]  -r 0.0.0.0  - routing address         (optional, default = 0.0.0.0)\n"
+        "* [11]     0           - routing address mask    (optional, default = 0)\n"
+        "* [12, 13] -i wlan0    - physical network interface (opt., default = eth0)\n*\n"
         "* Enter 'exitvpn' in terminal to close the server.\n";
         return EXIT_FAILURE;
     }

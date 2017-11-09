@@ -31,19 +31,11 @@
 #include <sys/time.h>
 
 /**
- * @brief VPNServer class\r\n
- * How to run:\r\n
- * ./VPN_Server 8000 test -m 1400 -a 10.0.0.0 8 -d 8.8.8.8 -r 0.0.0.0 0 -i wlan0\r\n
- *  where: argv[i]\r\n
- * [1]      8000        - port to listen (mandatory)\r\n
- * [2]      test        - secret phrase  (mandatory)\r\n
- * [3, 4]   -m 1400     - packet mtu     (optional, default = 1400)\r\n
- * [5, 6]   -a 10.0.0.0 - virtual network address (optional, default = 10.0.0.0)\r\n
- * [7]      8           - virtual network mask    (optional, default = 8)\r\n
- * [8, 9]   -d 8.8.8.8  - DNS-server address      (optional, default = 8.8.8.8)\r\n
- * [10, 11] -r 0.0.0.0  - routing address         (optional, default = 0.0.0.0)\r\n
- * [12]     0           - routing address mask    (optional, default = 0)\r\n
- * [13, 14] -i wlan0    - physical network interface (opt., default = eth0)\r\n
+ * @brief The VPNServer class<br>
+ * Main application class that<br>
+ * organizes a process of creating, removing and processing<br>
+ * vpn tunnels, provides encrypting/decrypting of packets.<br>
+ * To run the server loop call 'initConsolInput' method.<br>
  */
 class VPNServer {
 private:
@@ -203,8 +195,15 @@ public:
 
             int timer = 0;
 
+            /** @todo:
+             * When received zero packet from client (packet[0] == 0)
+             * and packet[1] == CLIENT_DISCONNECTED,
+             * then set isClientConnected to false
+             * */
+            bool isClientConnected = true;
+
             // we keep forwarding packets till something goes wrong.
-            while (true) {
+            while (isClientConnected) {
                 // assume that we did not make any progress in this iteration.
                 bool idle = true;
 
@@ -218,7 +217,7 @@ public:
                         int e = wolfSSL_get_error(tunnel.second, 0);
                         printf("error = %d, %s\n", e, wolfSSL_ERR_reason_error_string(e));
                     } else {
-                        TunnelManager::log("outgoing packet from interface to the tunnel.");
+                        // TunnelManager::log("outgoing packet from interface to the tunnel.");
                     }
 
                     // there might be more outgoing packets.
@@ -248,10 +247,14 @@ public:
                         if(sentData < 0) {
                             TunnelManager::log("write(interface, packet, length) < 0");
                         } else {
-                            TunnelManager::log("written the incoming packet to the output stream..");
+                            // TunnelManager::log("written the incoming packet to the output stream..");
                         }
 
                     } else {
+                        /// if(packet[1] == CLIENT_DISCONNECTED) {
+                        /// @todo: Here check if client sent
+                        /// 'disconnect'-packet and disconnect from client
+                        /// }
                         TunnelManager::log("Recieved empty control msg from client");
                     }
 
@@ -326,7 +329,7 @@ public:
      * @param argv - arguments vector
      */
     void parseArguments(int argc, char** argv) {
-        if(argc < 3) {
+        if(argc < 2) {
             TunnelManager::log("Arguments list is too small!",
                                std::cerr);
             exit(1);
@@ -342,8 +345,6 @@ public:
                                std::cerr);
             exit(1);
         }
-
-        cliParams.secretPassword  = argv[2];
 
         for(int i = 4; i < argc; ++i) {
             if(strcmp("-m", argv[i]) == EQUALS) {
@@ -363,10 +364,6 @@ public:
             if(strcmp("-i", argv[i]) == EQUALS) {
                 cliParams.physInterface = argv[i + 1];
             }
-            /*
-            if(strcmp("-tn", argv[i]) == EQUALS) {
-                tunnelCounter = atoi(argv[i + 1]);
-            } */
         }
 
         /* if there was no specific arguments,
