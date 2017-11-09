@@ -37,7 +37,7 @@ public class VpnClient extends Activity {
             new CountryObject(R.drawable.ic_flag_of_ukraine, "Home LAN server",
                     "192.168.0.104", "8000"),
             new CountryObject(R.drawable.ic_flag_of_the_united_states, "United States",
-                    "127.0.0.1", "8000")
+                    "192.241.141.236", "8000")
     });
 
 
