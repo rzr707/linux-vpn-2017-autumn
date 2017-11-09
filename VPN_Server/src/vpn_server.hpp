@@ -66,16 +66,13 @@ public:
 
         manager = new IPManager(cliParams.virtualNetworkIp + '/' + cliParams.networkMask,
                                 6); // IP pool init size
-        tunMgr  = new TunnelManager("data/pid_list.dat",
-                                    "data/tun_list.dat",
-                                    "data/save_tun_list.txt");
+        tunMgr  = new TunnelManager;
 
         // Enable IP forwarding
         tunMgr->execTerminalCommand("echo 1 > /proc/sys/net/ipv4/ip_forward");
 
         /* In case if program was terminated by error: */
-        tunMgr->killAllProcesses(tunMgr->getInfoList(tunMgr->getPidListFilename()));
-        tunMgr->closeAllTunnels(tunMgr->getInfoList(tunMgr->getTunListFilename()));
+        tunMgr->cleanupTunnels();
 
         // Pick a range of private addresses and perform NAT over chosen network interface.
         std::string virtualLanAddress = cliParams.virtualNetworkIp + '/' + cliParams.networkMask;
@@ -88,13 +85,11 @@ public:
     }
 
     ~VPNServer() {
+        // Clean all tunnels with prefix "vpn_"
+        tunMgr->cleanupTunnels();
         // Disable IP Forwarding:
         tunMgr->execTerminalCommand("echo 0 > /proc/sys/net/ipv4/ip_forward");
-        /* Clear unix settings: removing tunnels and closing child processes */
-        tunMgr->closeAllTunnels();
-        // tunMgr->killAllProcesses(tunMgr->getInfoList(tunMgr->getPidListFilename()));
-
-        // remove NAT rule from iptables:
+        // Remove NAT rule from iptables:
         std::string virtualLanAddress = cliParams.virtualNetworkIp + '/' + cliParams.networkMask;
         std::string physInterfaceName = cliParams.physInterface;
         std::string postrouting
@@ -151,7 +146,7 @@ public:
         std::string serverIpStr = IPManager::getIpString(serTunAddr);
         std::string clientIpStr = IPManager::getIpString(cliTunAddr);
         size_t tunNumber        = tunMgr->getTunNumber();
-        std::string tunStr      = "tun" + std::to_string(tunNumber);
+        std::string tunStr      = "vpn_tun" + std::to_string(tunNumber);
 
         if(serTunAddr == 0 || cliTunAddr == 0) {
             TunnelManager::log("No free IP addresses. Tunnel will not be created.",

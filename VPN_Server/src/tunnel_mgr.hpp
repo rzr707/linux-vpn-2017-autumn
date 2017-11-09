@@ -13,6 +13,9 @@
 #include <unistd.h> // pid_t
 #include <signal.h> // SIGINT
 
+#include <sys/types.h>
+#include <ifaddrs.h>
+
 /**
  * @brief The TunnelManager class
  * Contains tunnel set of currently using tunnels
@@ -21,33 +24,21 @@
  */
 class TunnelManager {
 private:
-    const char*        pidListFilename;
-    const char*        tunListFilename;
-    const char*        SaveTunListFilename;
     std::fstream       file;
     std::fstream       save_tun_file;
     std::queue<size_t> tunQueue;
     std::set<size_t>   tunSet;
     size_t             tunNumber;
 public:
-    /* Forbid creating default ctor and copy ctor: */
-    TunnelManager() = delete;
+    /* Forbid creating default copy ctor: */
     TunnelManager(TunnelManager& that) = delete;
 
-    TunnelManager
-    (const char* pidListFilename, const char* tunListFilename, const char* inSaveTunListFilename)
-        : pidListFilename(pidListFilename),
-          tunListFilename(tunListFilename),
-          SaveTunListFilename(inSaveTunListFilename),
-          tunNumber(0)
-    { 
-        DelTunFromFile("", true);
+    explicit TunnelManager() : tunNumber(0) {
+        // DelTunFromFile("", true);
     }
 
     ~TunnelManager() {
-        cleanFile(pidListFilename);
-        cleanFile(tunListFilename);
-        cleanFile(SaveTunListFilename);
+        cleanupTunnels("vpn_tun");
     }
 
     void write(const std::string& filename,
@@ -80,20 +71,11 @@ public:
         return list;
     }
 
-    const char* getTunListFilename() const {
-        return tunListFilename;
-    }
-
-    const char* getPidListFilename() const {
-        return pidListFilename;
-    }
-
     void cleanFile(const char* filename) {
         file.open(filename,
                   std::ios_base::out | std::ios_base::trunc);
         file.close();
     }
-
 
     /**
      * @brief execTerminalCommand - runs command from terminal (linux console)
@@ -116,18 +98,18 @@ public:
         std::string t = "ip link delete " + tunStr;
                 // "ip link set dev " + tunStr + " down";
         execTerminalCommand(t.c_str());
-        DelTunFromFile(tunStr);    
+        //DelTunFromFile(tunStr);
     }
 
-    void closeTunNumber(const size_t& num) {
-        closeiftun(std::string() + "tun" + std::to_string(num));
+    void closeTunNumber(const size_t& num, const std::string tunPrefix = "vpn_") {
+        closeiftun(std::string() + tunPrefix +"tun" + std::to_string(num));
         tunQueue.push(num);
         tunSet.erase(num);
     }
 
-    void closeAllTunnels() {
+    void closeAllTunnels(const std::string tunPrefix = "vpn_") {
         for(const size_t& tunNum : tunSet) {
-             closeiftun(std::string() + "tun" + std::to_string(tunNum));
+             closeiftun(std::string() + tunPrefix +  "tun" + std::to_string(tunNum));
         }
     }
 
@@ -136,7 +118,6 @@ public:
             TunnelManager::log("Closing tunnel '" + s + '\'');
             closeiftun(s);
         }
-        cleanFile(tunListFilename);
     }
 
     void killProcess(const std::string& procId) {
@@ -152,7 +133,6 @@ public:
                 TunnelManager::log("No need to kill parent process");
             }
         }
-        cleanFile(pidListFilename);
     }
 
     /**
@@ -186,19 +166,6 @@ public:
     }
 
     /**
-     * @brief log - log out the message to output stream 's'
-     * (needs to be reimplemented as separate
-     *  class in log.hpp or utils.hpp)
-     * @param msg - message to log out
-     * @param s   - output stream
-     */
-    static void log(const std::string& msg,
-                    std::ostream& s = std::cout) {
-        s << currentTime() << ' '
-          << msg << std::endl;
-    }
-
-    /**
      * @brief initUnixSettings - uplink new p2p tunnel
      *                           (server must be running with root permissions)
      * @param serverTunAddr    - server tunnel ip
@@ -216,15 +183,10 @@ public:
         std::string ifconfig = "ifconfig " + tunName + " " + serverTunAddr +
                           " dstaddr " + clientTunAddr + " up";
         execTerminalCommand(ifconfig);
-        SaveTunToFile(tunName);
-        /*
-        // write tunnel to created tunnels list:
-        write(getTunListFilename(), tunName);
-        // write process pid to created processes list:
-        write(getPidListFilename(), to_string(getpid()));
-        */
+        // SaveTunToFile(tunName);
     }
     
+    /*
     void SaveTunToFile(const std::string& TunName)
     {
         save_tun_file.open(SaveTunListFilename, std::ios_base::out | std::ios_base::app);
@@ -272,8 +234,40 @@ public:
         }
         
         save_tun_file.close();
+    } */
+
+    /**
+     * @brief cleanupTunnels method cleans uplinked tunnels previous<br>
+     * VPN Server work (if server crashed and didn't delete interfaces<br>
+     * from the system.
+     * @param tunnelPrefix - tunnel prefix to compare. e.g. "vpn_tun"<br>
+     */
+    void cleanupTunnels(const char* tunnelPrefix = "vpn_") {
+        ifaddrs *iface, *temp;
+        getifaddrs(&iface);
+        temp = iface;
+
+        while(temp) {
+            if(strstr(temp->ifa_name, tunnelPrefix)) {
+                closeiftun(temp->ifa_name);
+            }
+            temp = temp->ifa_next;
+        }
+        freeifaddrs(iface);
     }
 
+    /**
+     * @brief log - log out the message to output stream 's'
+     * (needs to be reimplemented as separate
+     *  class in log.hpp or utils.hpp)
+     * @param msg - message to log out
+     * @param s   - output stream
+     */
+    static void log(const std::string& msg,
+                    std::ostream& s = std::cout) {
+        s << currentTime() << ' '
+          << msg << std::endl;
+    }
 };
 
 #endif // TUNNEL_MGR_HPP
