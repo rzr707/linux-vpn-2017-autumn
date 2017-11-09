@@ -17,14 +17,21 @@ The server application is runned like daemon (service). It has to be installed o
 
    * $ cd wolfssl/
    * $ ./autogen.sh
-   * $ make --enable-dtls
+   * $ ./configure --enable-dtls
+   * $ make
    * $ make check
    * $ sudo make install
+   * # mv /usr/local/lib/libwolfssl.la /usr/lib/libwolfssl.la 
+   * # mv /usr/local/lib/libwolfssl.so /usr/lib/libwolfssl.so
+   * # mv /usr/local/lib/libwolfssl.so.14 /usr/lib/libwolfssl.so.14
+   * # mv /usr/local/lib/libwolfssl.so.14.0.0 /usr/lib/libwolfssl.so.14.0.0
 
 3. Compile server:
   
    * $ cd VPN_Server/
    * $ make
+       or
+   * $ g++ -std=c++11 main.cpp vpn_server.hpp ip_manager.hpp tunnel_mgr.hpp -lwolfssl -o VPN_Server
 
 4. (Optional) You can generate your own certificates and keys. Use openssl for this. When generated, put your new files to VPN_Server/certs/ directory, replacing the old ones. Also you need replace ca_cert.pem in client application the path is VPNClient/app/src/main/assets/
 
