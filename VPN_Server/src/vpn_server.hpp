@@ -47,11 +47,11 @@ private:
     TunnelManager*       tunMgr;
     std::recursive_mutex mutex;
     const int            TIMEOUT_LIMIT = 60000;
+    const unsigned       default_values = 7;
     WOLFSSL_CTX*         ctx;
 
 public:
-    explicit VPNServer
-    (int argc, char** argv) {
+    explicit VPNServer (int argc, char** argv) {
         this->argc = argc;
         this->argv = argv;
         parseArguments(argc, argv); // fill 'cliParams struct'
@@ -110,7 +110,6 @@ public:
      * revert system settings, exit the application.\r\n
      */
     void initConsoleInput() {
-        bool isExit = false;
         std::string input;
 
         mutex.lock();
@@ -120,10 +119,10 @@ public:
 
         std::thread t(&VPNServer::createNewConnection, this);
         t.detach();
-        while(!isExit) {
+        while(true) {
             getline(std::cin, input);
             if(input == "exitvpn") {
-                isExit = true;
+                break;
             }
         }
         TunnelManager::log("Closing the VPN Server...");
@@ -146,6 +145,23 @@ public:
         std::string clientIpStr = IPManager::getIpString(cliTunAddr);
         size_t tunNumber        = tunMgr->getTunNumber();
         std::string tunStr      = "vpn_tun" + std::to_string(tunNumber);
+        std::string tempTunStr = tunStr;
+        int interface = 0; // Tun interface
+        int sentParameters = -12345;
+        int e = 0;
+        // allocate the buffer for a single packet.
+        char packet[32767];
+        int timer = 0;
+        /** @todo:
+         * When received zero packet from client (packet[0] == 0)
+         * and packet[1] == CLIENT_DISCONNECTED,
+         * then set isClientConnected to false
+         * */
+        bool isClientConnected = true;
+        bool idle = true;
+        int length = 0;
+        int sentData = 0;
+        std::pair<int, WOLFSSL*> tunnel;
 
         if(serTunAddr == 0 || cliTunAddr == 0) {
             TunnelManager::log("No free IP addresses. Tunnel will not be created.",
@@ -158,20 +174,18 @@ public:
                                  clientIpStr,
                                  tunStr);
         // Get TUN interface.
-        int interface = get_interface(tunStr.c_str());
+        interface = get_interface(tunStr.c_str());
 
         // fill array with parameters to send:
         buildParameters(clientIpStr);
         mutex.unlock();
 
         // wait for a tunnel.
-        std::pair<int, WOLFSSL*> tunnel;
         while ((tunnel = get_tunnel(port.c_str())).first != -1
                &&
                tunnel.second != nullptr) {
 
             TunnelManager::log("New client connected to [" + tunStr + "]");
-            std::string tempTunStr = tunStr;
 
             /* if client is connected then run another instance of connection
              * in a new thread: */
@@ -180,8 +194,7 @@ public:
 
             // put the tunnel into non-blocking mode.
             fcntl(tunnel.first, F_SETFL, O_NONBLOCK);
-
-            int sentParameters = -12345;
+            
             // send the parameters several times in case of packet loss.
             for (int i = 0; i < 3; ++i) {
                 sentParameters =
@@ -189,51 +202,38 @@ public:
                                  sizeof(cliParams.parametersToSend),
                                  MSG_NOSIGNAL);
 
-                    if(sentParameters < 0) {
+                if(sentParameters < 0) {
                     TunnelManager::log("Error sending parameters: " +
-                                       std::to_string(sentParameters));
-                    int e = wolfSSL_get_error(tunnel.second, 0);
+                                    std::to_string(sentParameters));
+                    e = wolfSSL_get_error(tunnel.second, 0);
                     printf("error = %d, %s\n", e, wolfSSL_ERR_reason_error_string(e));
                 }
             }
 
-            // allocate the buffer for a single packet.
-            char packet[32767];
-
-            int timer = 0;
-
-            /** @todo:
-             * When received zero packet from client (packet[0] == 0)
-             * and packet[1] == CLIENT_DISCONNECTED,
-             * then set isClientConnected to false
-             * */
-            bool isClientConnected = true;
-
             // we keep forwarding packets till something goes wrong.
             while (isClientConnected) {
                 // assume that we did not make any progress in this iteration.
-                bool idle = true;
+                idle = true;
 
                 // read the outgoing packet from the input stream.
-                int length = read(interface, packet, sizeof(packet));
+                length = read(interface, packet, sizeof(packet));
                 if (length > 0) {
                     // write the outgoing packet to the tunnel.
-                    int sentData = wolfSSL_send(tunnel.second, packet, length, MSG_NOSIGNAL);
+                    sentData = wolfSSL_send(tunnel.second, packet, length, MSG_NOSIGNAL);
                     if(sentData < 0) {
                         TunnelManager::log("sentData < 0");
-                        int e = wolfSSL_get_error(tunnel.second, 0);
+                        e = wolfSSL_get_error(tunnel.second, 0);
                         printf("error = %d, %s\n", e, wolfSSL_ERR_reason_error_string(e));
-                    } else {
+                    } /*else {
                         // TunnelManager::log("outgoing packet from interface to the tunnel.");
-                    }
+                    }*/
 
                     // there might be more outgoing packets.
                     idle = false;
 
                     // if we were receiving, switch to sending.
-                    if (timer < 1) {
+                    if (timer < 1)
                         timer = 1;
-                    }
                 }
 
                 // read the incoming packet from the tunnel.
@@ -250,7 +250,7 @@ public:
                     // ignore control messages, which start with zero.
                     if (packet[0] != 0) {
                         // write the incoming packet to the output stream.
-                        int sentData = write(interface, packet, length);
+                        sentData = write(interface, packet, length);
                         if(sentData < 0) {
                             TunnelManager::log("write(interface, packet, length) < 0");
                         } else {
@@ -288,10 +288,10 @@ public:
                         // send empty control messages.
                         packet[0] = 0;
                         for (int i = 0; i < 3; ++i) {
-                            int sentData = wolfSSL_send(tunnel.second, packet, 1, MSG_NOSIGNAL);
+                            sentData = wolfSSL_send(tunnel.second, packet, 1, MSG_NOSIGNAL);
                             if(sentData < 0) {
                                 TunnelManager::log("sentData < 0");
-                                int e = wolfSSL_get_error(tunnel.second, 0);
+                                e = wolfSSL_get_error(tunnel.second, 0);
                                 printf("error = %d, %s\n", e, wolfSSL_ERR_reason_error_string(e));
                             } else {
                                 TunnelManager::log("sent empty control packet");
@@ -327,6 +327,14 @@ public:
         TunnelManager::log("Cannot create tunnels", std::cerr);
         exit(1);
     }
+    
+    void SetDefaultSettings(std::string *&in_param, char& type) {
+        if(in_param.empty())
+            return;
+        
+        std:string default_values[] = {"1400", "10.0.0.0", "8", "8.8.8.8", "0.0.0.0", "0", "eth0"};
+        *in_param = default_values[type];    
+    }
 
     /**
      * @brief parseArguments method
@@ -336,13 +344,7 @@ public:
      * @param argv - arguments vector
      */
     void parseArguments(int argc, char** argv) {
-        if(argc < 2) {
-            TunnelManager::log("Arguments list is too small!",
-                               std::cerr);
-            exit(1);
-        }
-
-        const unsigned int EQUALS = 0;
+        std::string* std_params[default_values] = {&cliParams.mtu, &cliParams.virtualNetworkIp, &cliParams.networkMask, &cliParams.dnsIp, &cliParams.routeIp, &cliParams.routeMask, &cliParams.physInterface};
         port = argv[1]; // port to listen
 
         if(atoi(port.c_str()) < 1 || atoi(port.c_str()) > 0xFFFF) {
@@ -354,49 +356,35 @@ public:
         }
 
         for(int i = 4; i < argc; ++i) {
-            if(strcmp("-m", argv[i]) == EQUALS) {
-                cliParams.mtu = argv[i + 1];
-            }
-            if(strcmp("-a", argv[i]) == EQUALS) {
-                cliParams.virtualNetworkIp = argv[i + 1];
-                cliParams.networkMask = argv[i + 2];
-            }
-            if(strcmp("-d", argv[i]) == EQUALS) {
-                cliParams.dnsIp = argv[i + 1];
-            }
-            if(strcmp("-r", argv[i]) == EQUALS) {
-                cliParams.routeIp = argv[i + 1];
-                cliParams.routeMask = argv[i + 2];
-            }
-            if(strcmp("-i", argv[i]) == EQUALS) {
-                cliParams.physInterface = argv[i + 1];
+            switch (atoi(argv[i]+1)) {
+                case 'm':
+                    cliParams.mtu = argv[i + 1];
+                    break;
+                case 'a':
+                    cliParams.virtualNetworkIp = argv[i + 1];
+                    cliParams.networkMask = argv[i + 2];
+                    break;
+                case 'd':
+                    cliParams.dnsIp = argv[i + 1];
+                    break;
+                case 'r':
+                    cliParams.routeIp = argv[i + 1];
+                    cliParams.routeMask = argv[i + 2];
+                    break;
+                case 'i':
+                    cliParams.physInterface = argv[i + 1];
+                    break;
+                default:
+                    break;        
             }
         }
 
         /* if there was no specific arguments,
          *  default settings will be set up
          */
-        if(cliParams.mtu.empty()) {
-            cliParams.mtu = "1400";
-        }
-        if(cliParams.virtualNetworkIp.empty()) {
-            cliParams.virtualNetworkIp = "10.0.0.0";
-        }
-        if(cliParams.networkMask.empty()) {
-            cliParams.networkMask = "8";
-        }
-        if(cliParams.dnsIp.empty()) {
-            cliParams.dnsIp = "8.8.8.8";
-        }
-        if(cliParams.routeIp.empty()) {
-            cliParams.routeIp = "0.0.0.0";
-        }
-        if(cliParams.routeMask.empty()) {
-            cliParams.routeMask = "0";
-        }
-        if(cliParams.physInterface.empty()) {
-            cliParams.physInterface = "eth0";
-        }
+         
+        for(unsigned i = 0;i < default_values; i++)
+            SetDefaultSettings(std_params[i], i);
     }
 
     /**
@@ -407,7 +395,7 @@ public:
      */
     void buildParameters(const std::string& clientIp) {
 
-        int size     = sizeof(cliParams.parametersToSend);
+        int size = sizeof(cliParams.parametersToSend);
         // Here is parameters string formed:
         std::string paramStr = std::string() + "m," + cliParams.mtu +
                 " a," + clientIp + ",32 d," + cliParams.dnsIp +
@@ -448,6 +436,17 @@ public:
         // we use an IPv6 socket to cover both IPv4 and IPv6.
         int tunnel = socket(AF_INET6, SOCK_DGRAM, 0);
         int flag = 1;
+         // receive packets till the secret matches.
+        char packet[1024];
+        socklen_t addrlen;
+        int n = 0;
+        WOLFSSL* ssl;
+
+        /* Create the WOLFSSL Object */
+        if ((ssl = wolfSSL_new(ctx)) == NULL) {
+            printf("wolfSSL_new error.\n");
+            exit(1);
+        }
         setsockopt(tunnel, SOL_SOCKET, SO_REUSEADDR, &flag, sizeof(flag));
         flag = 0;
         setsockopt(tunnel, IPPROTO_IPV6, IPV6_V6ONLY, &flag, sizeof(flag));
@@ -466,29 +465,19 @@ public:
             std::this_thread::sleep_for(std::chrono::microseconds(100000));
         }
 
-        // receive packets till the secret matches.
-        char packet[1024];
-        socklen_t addrlen;
+   
 
-            addrlen = sizeof(addr);
-            int n = recvfrom(tunnel, packet, sizeof(packet), 0,
-                    (sockaddr *)&addr, &addrlen);
-            if (n <= 0) {
-                return std::pair<int, WOLFSSL*>(-1, nullptr);
-            }
-            packet[n] = 0;
+        addrlen = sizeof(addr);
+        n = recvfrom(tunnel, packet, sizeof(packet), 0,
+                (sockaddr *)&addr, &addrlen);
+        if (n <= 0) {
+            return std::pair<int, WOLFSSL*>(-1, nullptr);
+        }
+        packet[n] = 0;
 
 
         // connect to the client
         connect(tunnel, (sockaddr *)&addr, addrlen);
-
-        WOLFSSL* ssl;
-
-        /* Create the WOLFSSL Object */
-        if ((ssl = wolfSSL_new(ctx)) == NULL) {
-            printf("wolfSSL_new error.\n");
-            exit(1);
-        }
 
         /* set the session ssl to client connection port */
         wolfSSL_set_fd(ssl, tunnel);
