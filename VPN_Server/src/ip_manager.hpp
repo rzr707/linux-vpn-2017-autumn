@@ -1,5 +1,3 @@
-//#define DEBUG
-
 #ifndef IP_MANAGER_HPP
 #define IP_MANAGER_HPP
 
@@ -52,13 +50,6 @@ public:
         } else {
             std::string ip = ipAndMask.substr(0, slashPos);
             uint32_t networkMaskBitCount = atoi(ipAndMask.substr(slashPos + 1).c_str());
-
-#ifdef DEBUG
-            cout << "slashpos is " << slashPos
-                 << " ip is: " << ip.c_str()
-                 << ", networkMaskBitCount is: " << networkMaskBitCount
-                 << endl;
-#endif // DEBUG
 
             ipaddr         = inet_addr(ip.c_str());
             networkAddress = ipaddr;
@@ -171,13 +162,6 @@ public:
     bool isInRange(in_addr_t nextAddr) {
         in_addr_t lowerBound = ntohl((networkAddress & netmask));
         in_addr_t upperBound = ((lowerBound | ntohl((~netmask))));
-
-#ifdef DEBUG
-        cout << "LowerBound string: " << IPManager::getIpString(htonl(lowerBound)) << ", int: " << lowerBound
-             << " UpperBound: " << IPManager::getIpString(htonl(upperBound)) << ", int: " << upperBound
-             << " address to check: " << IPManager::getIpString(nextAddr) << ", int: " << nextAddr
-             << endl;
-#endif // DEBUG
 
         if(ntohl(nextAddr) >= lowerBound &&
            ntohl(nextAddr) <= upperBound) {
