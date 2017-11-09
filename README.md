@@ -21,10 +21,10 @@ The server application is runned like daemon (service). It has to be installed o
    * $ make
    * $ make check
    * $ sudo make install
-   * # mv /usr/local/lib/libwolfssl.la /usr/lib/libwolfssl.la 
-   * # mv /usr/local/lib/libwolfssl.so /usr/lib/libwolfssl.so
-   * # mv /usr/local/lib/libwolfssl.so.14 /usr/lib/libwolfssl.so.14
-   * # mv /usr/local/lib/libwolfssl.so.14.0.0 /usr/lib/libwolfssl.so.14.0.0
+   * $ mv /usr/local/lib/libwolfssl.la /usr/lib/libwolfssl.la 
+   * $ mv /usr/local/lib/libwolfssl.so /usr/lib/libwolfssl.so
+   * $ mv /usr/local/lib/libwolfssl.so.14 /usr/lib/libwolfssl.so.14
+   * $ mv /usr/local/lib/libwolfssl.so.14.0.0 /usr/lib/libwolfssl.so.14.0.0
 
 3. Compile server:
   
