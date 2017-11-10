@@ -328,11 +328,11 @@ public:
         exit(1);
     }
     
-    void SetDefaultSettings(std::string *&in_param, char& type) {
-        if(in_param.empty())
+    void SetDefaultSettings(std::string *&in_param, unsigned char& type) {
+        if(in_param->empty())
             return;
         
-        std:string default_values[] = {"1400", "10.0.0.0", "8", "8.8.8.8", "0.0.0.0", "0", "eth0"};
+        std::string default_values[] = {"1400", "10.0.0.0", "8", "8.8.8.8", "0.0.0.0", "0", "eth0"};
         *in_param = default_values[type];    
     }
 
@@ -383,7 +383,7 @@ public:
          *  default settings will be set up
          */
          
-        for(unsigned i = 0;i < default_values; i++)
+        for(unsigned char i = 0;i < default_values; i++)
             SetDefaultSettings(std_params[i], i);
     }
 
