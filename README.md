@@ -30,8 +30,8 @@ The server application is runned like daemon (service). It has to be installed o
   
    * $ cd VPN_Server/
    * $ make
-       or
-   * $ g++ -std=c++11 main.cpp vpn_server.hpp ip_manager.hpp tunnel_mgr.hpp -lwolfssl -o VPN_Server
+   * or:
+   * $ g++ -std=c++11 main.cpp -lwolfssl -o ../VPN_Server
 
 4. (Optional) You can generate your own certificates and keys. Use openssl for this. When generated, put your new files to VPN_Server/certs/ directory, replacing the old ones. Also you need replace ca_cert.pem in client application the path is VPNClient/app/src/main/assets/
 
@@ -40,16 +40,15 @@ Server must be runned from superuser account. You can run server with this param
 ./VPN_Server 8000 test -a 10.0.0.0 8 -d 8.8.8.8 -r 0.0.0.0 0 -i wlan0
 Where:
 1. 8000 - port to listen
-2. test - password
-3. -a X.X.X.X Y (by default used 10.0.0.0 8)
+2. -a X.X.X.X Y (by default used 10.0.0.0 8)
    * X.X.X.X - tunnels network address
    * Y - tunnels netmask.
-4. -d X.X.X.X
+3. -d X.X.X.X
    * X.X.X.X - DNS Server address (used GoogleDNS 8.8.8.8 by default)
-5. -r X.X.X.X Y (by default used 0.0.0.0 0)
+4. -r X.X.X.X Y (by default used 0.0.0.0 0)
    * X.X.X.X - route IP
    * Y - route netmask
-6. -i xxxx (by default used eth0)
+5. -i xxxx (by default used eth0)
    * xxxx - physical network adapter to use (ethX, wlan1 etc.)
 
 # Android Client
