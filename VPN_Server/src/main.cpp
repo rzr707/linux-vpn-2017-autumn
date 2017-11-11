@@ -27,7 +27,7 @@
 #include "vpn_server.hpp"
 
 int main(int argc, char **argv) {
-    if (argc < 3) {
+    if (argc < 2) {
         std::cout <<
         "* How to:\n"
         "* " << argv[0] << " 8000 -m 1400 -a 10.0.0.0 8 -d 8.8.8.8 -r 0.0.0.0 0 -i wlan0\n"

@@ -328,11 +328,18 @@ public:
         exit(1);
     }
     
-    void SetDefaultSettings(std::string *&in_param, unsigned char& type) {
-        if(in_param->empty())
+    void SetDefaultSettings(std::string *&in_param, const size_t& type) {
+        if(!in_param->empty())
             return;
         
-        std::string default_values[] = {"1400", "10.0.0.0", "8", "8.8.8.8", "0.0.0.0", "0", "eth0"};
+        std::string default_values[] = {
+            "1400",
+            "10.0.0.0", "8",
+            "8.8.8.8",
+            "0.0.0.0", "0",
+            "eth0"
+        };
+
         *in_param = default_values[type];    
     }
 
@@ -344,7 +351,16 @@ public:
      * @param argv - arguments vector
      */
     void parseArguments(int argc, char** argv) {
-        std::string* std_params[default_values] = {&cliParams.mtu, &cliParams.virtualNetworkIp, &cliParams.networkMask, &cliParams.dnsIp, &cliParams.routeIp, &cliParams.routeMask, &cliParams.physInterface};
+        std::string* std_params[default_values] = {
+            &cliParams.mtu,
+            &cliParams.virtualNetworkIp,
+            &cliParams.networkMask,
+            &cliParams.dnsIp,
+            &cliParams.routeIp,
+            &cliParams.routeMask,
+            &cliParams.physInterface
+        };
+
         port = argv[1]; // port to listen
 
         if(atoi(port.c_str()) < 1 || atoi(port.c_str()) > 0xFFFF) {
@@ -355,8 +371,8 @@ public:
             exit(1);
         }
 
-        for(int i = 4; i < argc; ++i) {
-            switch (atoi(argv[i]+1)) {
+        for(int i = 2; i < argc; ++i) {
+            switch (argv[i][1]) {
                 case 'm':
                     cliParams.mtu = argv[i + 1];
                     break;
@@ -373,17 +389,14 @@ public:
                     break;
                 case 'i':
                     cliParams.physInterface = argv[i + 1];
-                    break;
-                default:
-                    break;        
+                    break;       
             }
         }
 
         /* if there was no specific arguments,
          *  default settings will be set up
          */
-         
-        for(unsigned char i = 0;i < default_values; i++)
+        for(size_t i = 0; i < default_values; ++i)
             SetDefaultSettings(std_params[i], i);
     }
 
@@ -491,6 +504,12 @@ public:
         return std::pair<int, WOLFSSL*>(tunnel, ssl);
     }
 
+    /**
+     * @brief initSsl
+     * Initialize SSL library, load certificates and keys,
+     * set up DTLS 1.2 protection type.
+     * Terminates the application if even one of steps is failed.
+     */
     void initSsl() {
         char caCertLoc[]   = "certs/ca_cert.pem";
         char servCertLoc[] = "certs/server-cert.pem";
@@ -504,7 +523,7 @@ public:
             exit(1);
         }
         /* Load CA certificates */
-        if (wolfSSL_CTX_load_verify_locations(ctx,caCertLoc,0) !=
+        if (wolfSSL_CTX_load_verify_locations(ctx, caCertLoc, 0) !=
                 SSL_SUCCESS) {
             printf("Error loading %s, please check the file.\n", caCertLoc);
             exit(1);
