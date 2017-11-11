@@ -28,7 +28,6 @@ public class VpnClient extends Activity {
     private boolean isConnected = false;
     private String serverAddress;
     private String serverPort;
-    private String sharedSecret;
     private ImageView buttonImageView;
     private Spinner   serverSpinner;
 
@@ -36,7 +35,7 @@ public class VpnClient extends Activity {
     private final Countries countries = new Countries(new CountryObject[] {
             new CountryObject(R.drawable.ic_flag_of_ukraine, "Home LAN server",
                     "192.168.0.104", "8000"),
-            new CountryObject(R.drawable.ic_flag_of_the_united_states, "United States",
+            new CountryObject(R.drawable.ic_flag_of_the_united_states, "USA",
                     "192.241.141.236", "8000")
     });
 
@@ -45,7 +44,6 @@ public class VpnClient extends Activity {
         String NAME = "connection";
         String SERVER_ADDRESS = "server.address";
         String SERVER_PORT = "server.port";
-        String SHARED_SECRET = "shared.secret";
         String SPINNER_POSITION = "spinner.position";
         String BUTTON_STATE = "button.state";
     }
@@ -74,8 +72,6 @@ public class VpnClient extends Activity {
                 countries.getServerPorts()[serverSpinner.getSelectedItemPosition()]);
         isConnected = prefs.getBoolean(Prefs.BUTTON_STATE, false);
 
-        sharedSecret = "test"; // @todo: remove shared secret
-
         AnimatedVectorDrawable drawable
                 = (AnimatedVectorDrawable) getDrawable(!isConnected ?
                 R.drawable.animated_unlock :
@@ -95,7 +91,6 @@ public class VpnClient extends Activity {
                         prefs.edit()
                                 .putString(Prefs.SERVER_ADDRESS, countries.getIpAddresses()[serverSpinner.getSelectedItemPosition()])
                                 .putString(Prefs.SERVER_PORT, countries.getServerPorts()[serverSpinner.getSelectedItemPosition()])
-                                .putString(Prefs.SHARED_SECRET, "test")
                                 .putInt(Prefs.SPINNER_POSITION, serverSpinner.getSelectedItemPosition())
                                 .putBoolean(Prefs.BUTTON_STATE, !isConnected)
                                 .commit();

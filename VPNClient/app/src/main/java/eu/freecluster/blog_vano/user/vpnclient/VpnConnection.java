@@ -84,7 +84,6 @@ public class VpnConnection implements Runnable {
 
     private final String mServerName;
     private final int mServerPort;
-    private final byte[] mSharedSecret;
 
     private PendingIntent mConfigureIntent;
     private OnEstablishListener mOnEstablishListener;
@@ -102,12 +101,11 @@ public class VpnConnection implements Runnable {
      * @param connectionId - connection ID
      * @param serverName   - server name
      * @param serverPort   - port to connect
-     * @param sharedSecret - @todo: remove this, not used anymore
      * @param appContext   - application context, needed for loading android assets
      * @throws WolfSSLException - DTLS-specified exceptions
      */
     public VpnConnection(final android.net.VpnService service, final int connectionId,
-                         final String serverName, final int serverPort, final byte[] sharedSecret,
+                         final String serverName, final int serverPort,
                          Context appContext) throws WolfSSLException {
 
         /**
@@ -139,7 +137,6 @@ public class VpnConnection implements Runnable {
 
         mServerName = serverName;
         mServerPort= serverPort;
-        mSharedSecret = sharedSecret;
 
         sslLib = new WolfSSL();
         sslLib.setLoggingCb(new MyLoggingCallback()); // @todo: remove this (useless)
@@ -333,10 +330,10 @@ public class VpnConnection implements Runnable {
         byte[] packetArr  = packet.array();
 
         // Control messages always start with zero.
-        packet.put((byte) 0).put(mSharedSecret).flip();
+        packet.put((byte) 0).flip();
 
-        // Send the secret several times in case of packet loss.
-        for (int i = 0; i < 3; ++i) {
+        // Send the 'init-connection' packet several times in case of packet loss.
+        for (int i = 0; i < 4; ++i) {
             packet.position(0);
             ssl.write(packet.array(), 1024);
         }

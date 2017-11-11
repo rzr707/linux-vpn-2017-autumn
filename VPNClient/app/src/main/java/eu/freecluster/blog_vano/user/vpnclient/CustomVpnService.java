@@ -92,7 +92,6 @@ public class CustomVpnService /* renamed from 'VpnService' */ extends android.ne
         // Extract information from the shared preferences.
         final SharedPreferences prefs = getSharedPreferences(VpnClient.Prefs.NAME, MODE_PRIVATE);
         final String server = prefs.getString(VpnClient.Prefs.SERVER_ADDRESS, "");
-        final byte[] secret = prefs.getString(VpnClient.Prefs.SHARED_SECRET, "").getBytes();
         final int port;
         try {
             port = Integer.parseInt(prefs.getString(VpnClient.Prefs.SERVER_PORT, ""));
@@ -104,7 +103,7 @@ public class CustomVpnService /* renamed from 'VpnService' */ extends android.ne
 
         // Kick off a connection.
         startConnection(new eu.freecluster.blog_vano.user.vpnclient.VpnConnection(
-                this, mNextConnectionId.getAndIncrement(), server, port, secret, getApplicationContext()));
+                this, mNextConnectionId.getAndIncrement(), server, port, getApplicationContext()));
     }
 
     private void startConnection(final eu.freecluster.blog_vano.user.vpnclient.VpnConnection connection) throws WolfSSLException {
