@@ -26,8 +26,6 @@ import java.util.Arrays;
 
 public class VpnClient extends Activity {
     private boolean isConnected = false;
-    private String serverAddress;
-    private String serverPort;
     private ImageView buttonImageView;
     private Spinner   serverSpinner;
 
@@ -38,7 +36,6 @@ public class VpnClient extends Activity {
             new CountryObject(R.drawable.ic_flag_of_the_united_states, "USA",
                     "192.241.141.236", "8000")
     });
-
 
     public interface Prefs {
         String NAME = "connection";
@@ -66,10 +63,6 @@ public class VpnClient extends Activity {
         // Load preferences, such like chosen server and button state:
         final SharedPreferences prefs = getSharedPreferences(Prefs.NAME, MODE_PRIVATE);
         serverSpinner.setSelection(prefs.getInt(Prefs.SPINNER_POSITION, 0));
-        serverAddress = prefs.getString(Prefs.SERVER_ADDRESS,
-                countries.getCountriesNames()[serverSpinner.getSelectedItemPosition()]);
-        serverPort = prefs.getString(Prefs.SERVER_PORT,
-                countries.getServerPorts()[serverSpinner.getSelectedItemPosition()]);
         isConnected = prefs.getBoolean(Prefs.BUTTON_STATE, false);
 
         AnimatedVectorDrawable drawable

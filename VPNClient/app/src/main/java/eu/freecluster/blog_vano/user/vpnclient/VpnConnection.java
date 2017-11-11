@@ -10,6 +10,7 @@ import android.app.PendingIntent;
 import android.content.Context;
 import android.net.ConnectivityManager;
 import android.os.ParcelFileDescriptor;
+import android.os.PowerManager;
 import android.util.Log;
 
 import java.io.FileInputStream;
@@ -93,6 +94,9 @@ public class VpnConnection implements Runnable {
      */
     private boolean connectedToServer = false;
 
+    /** WakeLock object to prevent client from falling asleep when VPN is enabled */
+    private PowerManager.WakeLock wakeLock = null;
+
     /**
      * The main class where secure connection with server will be established and packets
      * will be forwarded from android device and into it.
@@ -154,6 +158,9 @@ public class VpnConnection implements Runnable {
             Log.e("WOLFSSL_SSL_FAILURE", "Failed to load ca certificate");
             System.exit(1);
         }
+
+        PowerManager powerManager = (PowerManager) appContext.getSystemService(Context.POWER_SERVICE);
+        wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "VpnWakeLock");
     }
 
     /**
@@ -230,6 +237,8 @@ public class VpnConnection implements Runnable {
             }
             Log.i("IO_CALLBACKS_DTLS", "Registered I/O callbacks");
 
+            wakeLock.acquire();
+
             /* call wolfSSL_connect */
             status = ssl.connect();
             if (status != WolfSSL.SSL_SUCCESS) {
@@ -291,7 +300,6 @@ public class VpnConnection implements Runnable {
                         packet.clear();
                     }
                 Thread.sleep(IDLE_INTERVAL_MS);
-                Thread.yield();
             }
         } catch (SocketException e) {
             Log.e(getTag(), "Cannot use socket", e);
@@ -305,6 +313,9 @@ public class VpnConnection implements Runnable {
                 }
             }
             connectedToServer = false;
+
+            // free wakeLock to prevent battery draining:
+            wakeLock.release();
         }
         return connectedToServer;
     }
@@ -479,7 +490,6 @@ public class VpnConnection implements Runnable {
                     }
                 try {
                     Thread.sleep(IDLE_INTERVAL_MS);
-                    Thread.yield();
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
