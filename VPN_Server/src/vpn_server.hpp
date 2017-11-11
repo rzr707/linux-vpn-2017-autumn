@@ -328,6 +328,13 @@ public:
         exit(1);
     }
     
+    /**
+     * @brief SetDefaultSettings
+     * Set parameters if they were not set by
+     * user via terminal arguments on startup
+     * @param in_param - pointer on reference of parameter string to check
+     * @param type     - index of parameters
+     */
     void SetDefaultSettings(std::string *&in_param, const size_t& type) {
         if(!in_param->empty())
             return;
@@ -444,6 +451,17 @@ public:
         return interface;
     }
 
+    /**
+     * @brief get_tunnel
+     * Method creates listening datagram socket for income connection,
+     * binds it to IP address and waiting for connection.
+     * When client is connected, method initialize SSL session and
+     * set socket to nonblocking mode.
+     * @param port - port to listen
+     * @return If success, pair with socket descriptor and
+     * SSL session object pointer will be returned, otherwise
+     * negative SD and nullptr.
+     */
     std::pair<int, WOLFSSL*>
     get_tunnel(const char *port) {
         // we use an IPv6 socket to cover both IPv4 and IPv6.
@@ -452,7 +470,6 @@ public:
          // receive packets till the secret matches.
         char packet[1024];
         socklen_t addrlen;
-        int n = 0;
         WOLFSSL* ssl;
 
         /* Create the WOLFSSL Object */
@@ -478,16 +495,11 @@ public:
             std::this_thread::sleep_for(std::chrono::microseconds(100000));
         }
 
-   
-
         addrlen = sizeof(addr);
-        n = recvfrom(tunnel, packet, sizeof(packet), 0,
-                (sockaddr *)&addr, &addrlen);
-        if (n <= 0) {
-            return std::pair<int, WOLFSSL*>(-1, nullptr);
+        while(recvfrom(tunnel, packet, sizeof(packet), 0,
+                       (sockaddr *)&addr, &addrlen) <= 0) {
+            // do nothing while recieved bytes <= 0
         }
-        packet[n] = 0;
-
 
         // connect to the client
         connect(tunnel, (sockaddr *)&addr, addrlen);
