@@ -4,6 +4,8 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.pm.ActivityInfo;
 import android.graphics.drawable.AnimatedVectorDrawable;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
 import android.os.Bundle;
 
 import android.content.Intent;
@@ -81,6 +83,12 @@ public class VpnClient extends Activity {
             @Override
             public void onClick(View view) {
                     if (!isConnected) {
+                        if(!hasInternetConnection()) {
+                            Toast.makeText(getApplicationContext(),
+                                    "Error: can't access internet",
+                                    Toast.LENGTH_LONG).show();
+                            return;
+                        }
                         prefs.edit()
                                 .putString(Prefs.SERVER_ADDRESS, countries.getIpAddresses()[serverSpinner.getSelectedItemPosition()])
                                 .putString(Prefs.SERVER_PORT, countries.getServerPorts()[serverSpinner.getSelectedItemPosition()])
@@ -133,6 +141,15 @@ public class VpnClient extends Activity {
     // check textview input
     public boolean isTextViewEmpty(TextView tv) {
         return tv.getText().toString().trim().isEmpty();
+    }
+
+    public boolean hasInternetConnection() {
+        ConnectivityManager mgr = (ConnectivityManager) this.getSystemService(Context.CONNECTIVITY_SERVICE);
+        if(mgr.getNetworkInfo(ConnectivityManager.TYPE_MOBILE).getState() == NetworkInfo.State.CONNECTED
+            || mgr.getNetworkInfo(ConnectivityManager.TYPE_WIFI).getState() == NetworkInfo.State.CONNECTED) {
+            return true;
+        } else
+            return false;
     }
 
     public class ServerSpinnerAdapter extends ArrayAdapter {
