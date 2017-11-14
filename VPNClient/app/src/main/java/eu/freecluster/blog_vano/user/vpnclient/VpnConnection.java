@@ -17,9 +17,11 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.PortUnreachableException;
 import java.net.SocketAddress;
 import java.net.SocketException;
 import java.nio.ByteBuffer;
@@ -39,6 +41,9 @@ import com.wolfssl.*;
  * 3) Add receiving timeout. If reached - make force disconnect.
  */
 public class VpnConnection implements Runnable {
+    private final byte WANT_CONNECT = 1;
+    private final byte WANT_DISCONNECT = 2;
+
     /**
      * Load wolfSSL shared JNI library:
      */
@@ -239,6 +244,19 @@ public class VpnConnection implements Runnable {
 
             wakeLock.acquire();
 
+            ByteBuffer bb = ByteBuffer.allocate(1024);
+            DatagramPacket dpacket = new DatagramPacket(bb.array(), 2);
+            dgramSock.connect(hostAddr, mServerPort);
+
+            // Send initial packets several times in case of packets loss to
+            // init the DTLS connection with server:
+            for(int i = 0; i < 4; ++i) {
+                bb.put((byte)0).put(WANT_CONNECT).flip();
+                bb.position(0);
+                dgramSock.send(dpacket);
+                bb.clear();
+            }
+
             /* call wolfSSL_connect */
             status = ssl.connect();
             if (status != WolfSSL.SSL_SUCCESS) {
@@ -274,7 +292,7 @@ public class VpnConnection implements Runnable {
             Thread receiver = new Thread(r);
             receiver.start();
 
-            dgramSock.setSoTimeout(0);
+            // dgramSock.setSoTimeout(0);
 
             // Here packets are forwarding from tunnel to secured socket:
             int ctrlPktCounter = 0;
@@ -301,8 +319,20 @@ public class VpnConnection implements Runnable {
                     }
                 Thread.sleep(IDLE_INTERVAL_MS);
             }
+        } catch (PortUnreachableException e) {
+            e.printStackTrace();
+            Log.e(getTag(), "Lost connection with server");
         } catch (SocketException e) {
             Log.e(getTag(), "Cannot use socket", e);
+        } catch (InterruptedException e) {
+            ByteBuffer packet = ByteBuffer.allocate(1024);
+            for(int i = 0; i < 4; ++i) {
+                packet.clear();
+                packet.position(0);
+                packet.put((byte)0).put(WANT_DISCONNECT).flip();
+                ssl.write(packet.array(), 2);
+                packet.clear();
+            }
         } finally {
             if (iface != null) {
                 try {
@@ -484,8 +514,6 @@ public class VpnConnection implements Runnable {
                             Log.i("CONTROL_PKT", "Control zero packet received");
                         }
                         Log.i("SSL_READ_SUCCESS", "Read " + len + " bytes of data: ");
-                        //Log.i("SSL_READ_SUCCESS", "Read " + len + " bytes of data: " +
-                        //      new String(buf.array(), 0, len));
                         buf.clear();
                     }
                 try {
