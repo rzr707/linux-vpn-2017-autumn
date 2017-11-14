@@ -51,6 +51,12 @@ private:
     WOLFSSL_CTX*         ctx;
 
 public:
+    enum PacketType {
+        ZERO_PACKET            = 0,
+        CLIENT_WANT_CONNECT    = 1,
+        CLIENT_WANT_DISCONNECT = 2
+    };
+
     explicit VPNServer (int argc, char** argv) {
         this->argc = argc;
         this->argv = argv;
@@ -258,11 +264,11 @@ public:
                         }
 
                     } else {
-                        /// if(packet[1] == CLIENT_DISCONNECTED) {
-                        /// @todo: Here check if client sent
-                        /// 'disconnect'-packet and disconnect from client
-                        /// }
                         TunnelManager::log("Recieved empty control msg from client");
+                        if(packet[1] == CLIENT_WANT_DISCONNECT) {
+                            TunnelManager::log("WANT_DISCONNECT from client");
+                            isClientConnected = false;
+                        }
                     }
 
                     // there might be more incoming packets.
@@ -496,10 +502,13 @@ public:
         }
 
         addrlen = sizeof(addr);
-        while(recvfrom(tunnel, packet, sizeof(packet), 0,
-                       (sockaddr *)&addr, &addrlen) <= 0) {
-            // do nothing while recieved bytes <= 0
-        }
+        int recievedLen = 0;
+        do {
+            recievedLen = recvfrom(tunnel, packet, sizeof(packet), 0,
+                                  (sockaddr *)&addr, &addrlen);
+        } while (recievedLen <= 0 ||
+                 (packet[0] != ZERO_PACKET && packet[1] != CLIENT_WANT_CONNECT)
+                 );
 
         // connect to the client
         connect(tunnel, (sockaddr *)&addr, addrlen);
@@ -508,7 +517,7 @@ public:
         wolfSSL_set_fd(ssl, tunnel);
         wolfSSL_set_using_nonblock(ssl, 1);
 
-        if(wolfSSL_accept(ssl) != WOLFSSL_SUCCESS) {
+        if(wolfSSL_accept(ssl) != SSL_SUCCESS) {
             wolfSSL_free(ssl);
             std::pair<int, WOLFSSL*>(-1, nullptr);
         }
@@ -553,6 +562,7 @@ public:
             exit(1);
         }
     }
+
 };
 
 #endif // VPN_SERVER_HPP
