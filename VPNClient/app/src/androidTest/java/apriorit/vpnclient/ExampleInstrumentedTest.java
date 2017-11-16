@@ -1,4 +1,4 @@
-package eu.freecluster.blog_vano.user.vpnclient;
+package apriorit.vpnclient;
 
 import android.content.Context;
 import android.support.test.InstrumentationRegistry;
@@ -21,6 +21,6 @@ public class ExampleInstrumentedTest {
         // Context of the app under test.
         Context appContext = InstrumentationRegistry.getTargetContext();
 
-        assertEquals("eu.freecluster.blog_vano.user.vpnclient", appContext.getPackageName());
+        assertEquals("apriorit.vpnclient", appContext.getPackageName());
     }
 }

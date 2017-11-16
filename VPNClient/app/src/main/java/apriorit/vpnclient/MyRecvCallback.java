@@ -1,13 +1,11 @@
-package eu.freecluster.blog_vano.user.vpnclient;
-
-import android.util.Log;
+package apriorit.vpnclient;
 
 import java.io.*;
 import java.net.*;
-import java.nio.*;
+
 import com.wolfssl.*;
 
-class ConnectRecvCallback implements WolfSSLIORecvCallback
+class MyRecvCallback implements WolfSSLIORecvCallback
 {
     public int receiveCallback(WolfSSLSession ssl, byte[] buf, int sz,
                                Object ctx) {
@@ -24,7 +22,7 @@ class ConnectRecvCallback implements WolfSSLIORecvCallback
             try {
                 dtlsTimeout = ssl.dtlsGetCurrentTimeout() * 1000;
                 dsock = ioctx.getDatagramSocket();
-                dsock.setSoTimeout(dtlsTimeout);
+                dsock.setSoTimeout(0);
                 recvPacket = new DatagramPacket(buf, sz);
 
                 dsock.receive(recvPacket);

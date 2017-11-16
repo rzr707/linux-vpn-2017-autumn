@@ -4,7 +4,7 @@ android {
     compileSdkVersion 26
     buildToolsVersion '26.0.2'
     defaultConfig {
-        applicationId "eu.freecluster.blog_vano.user.vpnclient"
+        applicationId "apriorit.vpnclient"
         minSdkVersion 21
         targetSdkVersion 26
         versionCode 1

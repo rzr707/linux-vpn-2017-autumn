@@ -1,4 +1,4 @@
-package eu.freecluster.blog_vano.user.vpnclient;
+package apriorit.vpnclient;
 
 import org.junit.Test;
 

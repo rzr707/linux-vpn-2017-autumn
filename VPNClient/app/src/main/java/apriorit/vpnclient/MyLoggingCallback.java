@@ -1,4 +1,4 @@
-package eu.freecluster.blog_vano.user.vpnclient;
+package apriorit.vpnclient;
 
 /**
  * Created by admin on 01.11.2017.

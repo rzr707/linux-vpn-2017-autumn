@@ -12,7 +12,7 @@
     -->
 
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-package="eu.freecluster.blog_vano.user.vpnclient">
+package="apriorit.vpnclient">
 
 <uses-permission android:name="android.permission.INTERNET"/>
 <!-- For preventing android to fall into sleeping when VPN is running: -->
@@ -23,7 +23,7 @@ package="eu.freecluster.blog_vano.user.vpnclient">
 
 <application android:label="@string/app" android:icon="@mipmap/ic_launcher">
 
-    <activity android:name="eu.freecluster.blog_vano.user.vpnclient.VpnClient"
+    <activity android:name="apriorit.vpnclient.VpnClient"
         android:configChanges="orientation|keyboardHidden">
         <intent-filter>
             <action android:name="android.intent.action.MAIN"/>
@@ -31,7 +31,7 @@ package="eu.freecluster.blog_vano.user.vpnclient">
         </intent-filter>
     </activity>
 
-    <service android:name="eu.freecluster.blog_vano.user.vpnclient.CustomVpnService"
+    <service android:name="apriorit.vpnclient.CustomVpnService"
         android:permission="android.permission.BIND_VPN_SERVICE">
         <intent-filter>
             <action android:name="android.net.VpnService"/>

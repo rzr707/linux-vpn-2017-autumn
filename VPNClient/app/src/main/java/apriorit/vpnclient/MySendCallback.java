@@ -1,8 +1,8 @@
-package eu.freecluster.blog_vano.user.vpnclient;
+package apriorit.vpnclient;
 
 import java.io.*;
 import java.net.*;
-import java.nio.*;
+
 import com.wolfssl.*;
 
 class MySendCallback implements WolfSSLIOSendCallback

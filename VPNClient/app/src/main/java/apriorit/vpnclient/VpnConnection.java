@@ -1,4 +1,4 @@
-package eu.freecluster.blog_vano.user.vpnclient;
+package apriorit.vpnclient;
 
 /**
  * Created by ivan on 01.10.2017.
@@ -8,7 +8,6 @@ import static java.nio.charset.StandardCharsets.US_ASCII;
 
 import android.app.PendingIntent;
 import android.content.Context;
-import android.net.ConnectivityManager;
 import android.os.ParcelFileDescriptor;
 import android.os.PowerManager;
 import android.util.Log;
@@ -25,7 +24,6 @@ import java.net.PortUnreachableException;
 import java.net.SocketAddress;
 import java.net.SocketException;
 import java.nio.ByteBuffer;
-import java.nio.channels.DatagramChannel;
 import java.util.Arrays;
 import java.util.concurrent.TimeUnit;
 import java.io.DataInputStream;

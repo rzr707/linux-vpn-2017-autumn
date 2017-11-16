@@ -1,4 +1,4 @@
-package eu.freecluster.blog_vano.user.vpnclient;
+package apriorit.vpnclient;
 
 /**
  * Created by ivan on 01.10.2017.
@@ -24,8 +24,8 @@ import java.util.concurrent.atomic.AtomicReference;
 public class CustomVpnService /* renamed from 'VpnService' */ extends android.net.VpnService implements Handler.Callback {
     private static final String TAG = CustomVpnService.class.getSimpleName();
 
-    public static final String ACTION_CONNECT = "eu.freecluster.blog_vano.user.vpnclient.START";
-    public static final String ACTION_DISCONNECT = "eu.freecluster.blog_vano.user.vpnclient.STOP";
+    public static final String ACTION_CONNECT = "apriorit.vpnclient.START";
+    public static final String ACTION_DISCONNECT = "apriorit.vpnclient.STOP";
 
     private Handler mHandler;
 
@@ -102,18 +102,18 @@ public class CustomVpnService /* renamed from 'VpnService' */ extends android.ne
 
 
         // Kick off a connection.
-        startConnection(new eu.freecluster.blog_vano.user.vpnclient.VpnConnection(
+        startConnection(new apriorit.vpnclient.VpnConnection(
                 this, mNextConnectionId.getAndIncrement(), server, port, getApplicationContext()));
     }
 
-    private void startConnection(final eu.freecluster.blog_vano.user.vpnclient.VpnConnection connection) throws WolfSSLException {
+    private void startConnection(final apriorit.vpnclient.VpnConnection connection) throws WolfSSLException {
         // Replace any existing connecting thread with the  new one.
         final Thread thread = new Thread(connection, "VpnConnectionThread");
         setConnectingThread(thread);
 
         // Handler to mark as connected once onEstablish is called.
         connection.setConfigureIntent(mConfigureIntent);
-        connection.setOnEstablishListener(new eu.freecluster.blog_vano.user.vpnclient.VpnConnection.OnEstablishListener() {
+        connection.setOnEstablishListener(new apriorit.vpnclient.VpnConnection.OnEstablishListener() {
             public void onEstablish(ParcelFileDescriptor tunInterface) {
                 mHandler.sendEmptyMessage(R.string.connected);
 

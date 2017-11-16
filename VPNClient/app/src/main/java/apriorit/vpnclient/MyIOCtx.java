@@ -1,4 +1,4 @@
-package eu.freecluster.blog_vano.user.vpnclient;
+package apriorit.vpnclient;
 
 /**
  * Created by admin on 29.10.2017.
@@ -8,10 +8,6 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
-import java.io.*;
-import java.net.*;
-import java.nio.*;
-import com.wolfssl.*;
 
 class MyIOCtx
 {
