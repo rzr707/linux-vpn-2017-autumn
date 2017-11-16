@@ -69,8 +69,8 @@ public class VpnClient extends Activity {
 
         AnimatedVectorDrawable drawable
                 = (AnimatedVectorDrawable) getDrawable(!isConnected ?
-                R.drawable.animated_unlock :
-                R.drawable.animated_lock);
+                R.drawable.unlocked_at_start :
+                R.drawable.locked_at_start);
         buttonImageView.setImageDrawable(drawable);
         drawable.start();
         buttonImageView.refreshDrawableState();
