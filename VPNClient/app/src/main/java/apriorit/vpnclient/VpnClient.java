@@ -110,6 +110,11 @@ public class VpnClient extends Activity {
     }
 
     @Override
+    public void onBackPressed() {
+        moveTaskToBack(true);
+    }
+
+    @Override
     protected void onActivityResult(int request, int result, Intent data) {
         if (result == RESULT_OK) {
             startService(getServiceIntent().setAction(CustomVpnService.ACTION_CONNECT));
