@@ -61,6 +61,7 @@ public class VpnClient extends Activity {
         serverSpinner.setSelection(prefs.getInt(Prefs.SPINNER_POSITION, 0));
         //isConnected = prefs.getBoolean(Prefs.BUTTON_STATE, false);
         isConnected = CustomVpnService.connected;
+        serverSpinner.setEnabled(!isConnected);
 
         AnimatedVectorDrawable drawable
                 = (AnimatedVectorDrawable) getDrawable(!isConnected ?
