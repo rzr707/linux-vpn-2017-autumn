@@ -26,7 +26,7 @@ public class CustomVpnService /* renamed from 'VpnService' */ extends android.ne
 
     public static final String ACTION_CONNECT = "apriorit.vpnclient.START";
     public static final String ACTION_DISCONNECT = "apriorit.vpnclient.STOP";
-
+    public static boolean connected = false;
     private Handler mHandler;
 
     private static class Connection extends Pair<Thread, ParcelFileDescriptor> {
@@ -122,6 +122,7 @@ public class CustomVpnService /* renamed from 'VpnService' */ extends android.ne
             }
         });
         thread.start();
+        connected = true;
     }
 
     private void setConnectingThread(final Thread thread) {
@@ -148,6 +149,7 @@ public class CustomVpnService /* renamed from 'VpnService' */ extends android.ne
         setConnectingThread(null);
         setConnection(null);
         stopForeground(true);
+        connected = false;
     }
 
     private void updateForegroundNotification(final int message) {

@@ -59,7 +59,8 @@ public class VpnClient extends Activity {
         // Load preferences, such like chosen server and button state:
         final SharedPreferences prefs = getSharedPreferences(Prefs.NAME, MODE_PRIVATE);
         serverSpinner.setSelection(prefs.getInt(Prefs.SPINNER_POSITION, 0));
-        isConnected = prefs.getBoolean(Prefs.BUTTON_STATE, false);
+        //isConnected = prefs.getBoolean(Prefs.BUTTON_STATE, false);
+        isConnected = CustomVpnService.connected;
 
         AnimatedVectorDrawable drawable
                 = (AnimatedVectorDrawable) getDrawable(!isConnected ?
