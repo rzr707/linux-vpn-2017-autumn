@@ -24,7 +24,9 @@ package="apriorit.vpnclient">
 <application android:label="@string/app" android:icon="@mipmap/ic_launcher">
 
     <activity android:name="apriorit.vpnclient.VpnClient"
-        android:configChanges="orientation|keyboardHidden">
+        android:configChanges="orientation|keyboardHidden"
+        android:launchMode="singleTask">
+
         <intent-filter>
             <action android:name="android.intent.action.MAIN"/>
             <category android:name="android.intent.category.LAUNCHER"/>
