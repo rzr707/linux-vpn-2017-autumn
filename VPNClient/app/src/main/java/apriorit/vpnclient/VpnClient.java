@@ -32,8 +32,8 @@ public class VpnClient extends Activity {
 
 
     private final Countries countries = new Countries(new CountryObject[] {
-            new CountryObject(R.drawable.ic_flag_of_ukraine, "Home LAN server",
-                    "192.168.0.104", "8000"),
+            new CountryObject(R.drawable.ic_flag_of_france, "France",
+                    "5.135.153.169", "8000"),
             new CountryObject(R.drawable.ic_flag_of_the_united_states, "USA",
                     "192.241.141.236", "8000")
     });
