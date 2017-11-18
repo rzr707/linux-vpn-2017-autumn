@@ -12,7 +12,10 @@ import android.os.Bundle;
 
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.os.Handler;
 import android.os.IBinder;
+import android.os.Message;
+import android.os.Messenger;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -23,13 +26,12 @@ import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
-public class VpnClient extends Activity {
+public class VpnClient extends Activity{
     private CustomVpnService mService;
-    private boolean isConnected = false;
     private ImageView buttonImageView;
     private Spinner   serverSpinner;
     private boolean mBound = false;
-
+    private boolean button_state = false;
 
     private final Countries countries = new Countries(new CountryObject[] {
             new CountryObject(R.drawable.ic_flag_of_france, "France",
@@ -45,6 +47,19 @@ public class VpnClient extends Activity {
         String SPINNER_POSITION = "spinner.position";
         String BUTTON_STATE = "button.state";
     }
+
+    public class MessageHandler extends Handler {
+        @Override
+        public void handleMessage(Message message) {
+            mBound = message.arg1 == 1;
+            // start lock/unlock animation:
+            startLockAnimation(message.arg1, buttonImageView);
+            serverSpinner.setEnabled(!mBound);
+
+        }
+    }
+
+    public Handler messageHandler = new MessageHandler();
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -64,10 +79,9 @@ public class VpnClient extends Activity {
         // Load preferences, such like chosen server and button state:
         final SharedPreferences prefs = getSharedPreferences(Prefs.NAME, MODE_PRIVATE);
         serverSpinner.setSelection(prefs.getInt(Prefs.SPINNER_POSITION, 0));
-        //isConnected = prefs.getBoolean(Prefs.BUTTON_STATE, false);
 
-        AnimatedVectorDrawable drawable
-                = (AnimatedVectorDrawable) getDrawable(R.drawable.unlocked_at_start);
+        AnimatedVectorDrawable drawable =
+                (AnimatedVectorDrawable) getDrawable(R.drawable.unlocked_at_start);
         buttonImageView.setImageDrawable(drawable);
         drawable.start();
         buttonImageView.refreshDrawableState();
@@ -77,38 +91,34 @@ public class VpnClient extends Activity {
         buttonImageView.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                    // start lock/unlock animation:
-                    startLockAnimation(mBound, buttonImageView);
-                    serverSpinner.setEnabled(mBound);
-
-                    if (!mBound) {
-                        if(!hasInternetConnection()) {
-                            Toast.makeText(getApplicationContext(),
-                                    "Error: can't access internet",
-                                    Toast.LENGTH_LONG).show();
-                            return;
-                        }
-
-                        prefs.edit()
-                                .putString(Prefs.SERVER_ADDRESS, countries.getIpAddresses()[serverSpinner.getSelectedItemPosition()])
-                                .putString(Prefs.SERVER_PORT, countries.getServerPorts()[serverSpinner.getSelectedItemPosition()])
-                                .putInt(Prefs.SPINNER_POSITION, serverSpinner.getSelectedItemPosition())
-                                .putBoolean(Prefs.BUTTON_STATE, !mBound)
-                                .commit();
-
-                        Intent intent = android.net.VpnService.prepare(VpnClient.this);
-                        if (intent != null) {
-                            // start vpn service:
-                            startActivityForResult(intent, 0);
-                        } else {
-                            onActivityResult(0, RESULT_OK, null);
-                        }
-                    } else {
-                        mService.SetDisconnect();
-                        unbindService(mConnection);
-                        mBound = false;
+                if (!mBound && !button_state) {
+                    if(!hasInternetConnection()) {
+                        Toast.makeText(getApplicationContext(),
+                                "Error: can't access internet",
+                                Toast.LENGTH_LONG).show();
+                        return;
                     }
-                    prefs.edit().putBoolean(Prefs.BUTTON_STATE, mBound).commit();
+
+                    prefs.edit()
+                            .putString(Prefs.SERVER_ADDRESS, countries.getIpAddresses()[serverSpinner.getSelectedItemPosition()])
+                            .putString(Prefs.SERVER_PORT, countries.getServerPorts()[serverSpinner.getSelectedItemPosition()])
+                            .putInt(Prefs.SPINNER_POSITION, serverSpinner.getSelectedItemPosition())
+                            .putBoolean(Prefs.BUTTON_STATE, !mBound)
+                            .commit();
+
+                    Intent intent = android.net.VpnService.prepare(VpnClient.this);
+                    if (intent != null) {
+                        // start vpn service:
+                        startActivityForResult(intent.putExtra("ConStat", new Messenger(messageHandler)), 0);
+                    } else {
+                        onActivityResult(0, RESULT_OK, null);
+                    }
+                } else {
+                    mService.SetDisconnect(mBound && button_state);
+                    unbindService(mConnection);
+                }
+                button_state = !button_state;
+                prefs.edit().putBoolean(Prefs.BUTTON_STATE, mBound).commit();
             }
         });
     }
@@ -121,7 +131,7 @@ public class VpnClient extends Activity {
     @Override
     protected void onActivityResult(int request, int result, Intent data) {
         if (result == RESULT_OK) {
-            bindService(getServiceIntent(), mConnection, Context.BIND_AUTO_CREATE);
+            bindService(getServiceIntent().putExtra("ConStat", new Messenger(messageHandler)), mConnection, Context.BIND_AUTO_CREATE);
         }
     }
 
@@ -134,7 +144,6 @@ public class VpnClient extends Activity {
             // We've bound to LocalService, cast the IBinder and get LocalService instance
             CustomVpnService.LocalBinder binder = (CustomVpnService.LocalBinder) service;
             mService = binder.getService();
-            mBound = true;
         }
 
         @Override
@@ -148,16 +157,17 @@ public class VpnClient extends Activity {
     }
 
     // animation setting:
-    public void startLockAnimation(boolean isLocked, ImageView view) {
+    public void startLockAnimation(int lock_type, ImageView view) {
         AnimatedVectorDrawable drawable
-                = (AnimatedVectorDrawable) getDrawable(isLocked ?
+                = (AnimatedVectorDrawable) getDrawable(lock_type == 0 ?
                 R.drawable.animated_unlock :
-                R.drawable.animated_lock);
+                lock_type == 1 ?
+                        R.drawable.animated_lock :
+                        R.drawable.unlocked_at_start);
 
         view.setImageDrawable(drawable);
         drawable.start();
     }
-
 
     // check textview input
     public boolean isTextViewEmpty(TextView tv) {
@@ -166,11 +176,8 @@ public class VpnClient extends Activity {
 
     public boolean hasInternetConnection() {
         ConnectivityManager mgr = (ConnectivityManager) this.getSystemService(Context.CONNECTIVITY_SERVICE);
-        if(mgr.getNetworkInfo(ConnectivityManager.TYPE_MOBILE).getState() == NetworkInfo.State.CONNECTED
-            || mgr.getNetworkInfo(ConnectivityManager.TYPE_WIFI).getState() == NetworkInfo.State.CONNECTED) {
-            return true;
-        } else
-            return false;
+        return (mgr.getNetworkInfo(ConnectivityManager.TYPE_MOBILE).getState() == NetworkInfo.State.CONNECTED
+                || mgr.getNetworkInfo(ConnectivityManager.TYPE_WIFI).getState() == NetworkInfo.State.CONNECTED);
     }
 
     public class ServerSpinnerAdapter extends ArrayAdapter {

@@ -5,10 +5,13 @@ import android.app.PendingIntent;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Binder;
+import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Message;
+import android.os.Messenger;
 import android.os.ParcelFileDescriptor;
+import android.os.RemoteException;
 import android.util.Log;
 import android.util.Pair;
 import android.widget.Toast;
@@ -23,6 +26,8 @@ public class CustomVpnService /* renamed from 'VpnService' */ extends android.ne
     private static final String TAG = CustomVpnService.class.getSimpleName();
     private Handler mHandler;
     private final IBinder mBinder = new LocalBinder();
+    private Messenger messageHandler;
+    private boolean already_bind = false; // to use correct messageHandler
 
     /**
      * Class used for the client Binder.  Because we know this service always
@@ -37,6 +42,12 @@ public class CustomVpnService /* renamed from 'VpnService' */ extends android.ne
 
     @Override
     public IBinder onBind(Intent intent) {
+        if(!already_bind)
+        {
+            Bundle extras = intent.getExtras();
+            messageHandler = (Messenger) extras.get("ConStat");
+            already_bind = true;
+        }
         return mBinder;
     }
 
@@ -46,8 +57,8 @@ public class CustomVpnService /* renamed from 'VpnService' */ extends android.ne
     }
 
     /** method for clients */
-    public void SetDisconnect() {
-        disconnect();
+    public void SetDisconnect(boolean is_connected) {
+        disconnect(is_connected);
     }
 
     private static class Connection extends Pair<Thread, ParcelFileDescriptor> {
@@ -106,7 +117,6 @@ public class CustomVpnService /* renamed from 'VpnService' */ extends android.ne
             return;
         }
 
-
         // Kick off a connection.
         startConnection(new apriorit.vpnclient.VpnConnection(
                 this, mNextConnectionId.getAndIncrement(), server, port, getApplicationContext()));
@@ -125,6 +135,13 @@ public class CustomVpnService /* renamed from 'VpnService' */ extends android.ne
 
                 mConnectingThread.compareAndSet(thread, null);
                 setConnection(new Connection(thread, tunInterface));
+                Message message = Message.obtain();
+                message.arg1 = 1;
+                try {
+                    messageHandler.send(message);
+                } catch (RemoteException e) {
+                    Log.e(TAG, "Can't send from service to client", e);
+                }
             }
         });
         thread.start();
@@ -149,11 +166,21 @@ public class CustomVpnService /* renamed from 'VpnService' */ extends android.ne
         }
     }
 
-    private void disconnect() {
-        mHandler.sendEmptyMessage(R.string.disconnected);
+    private void disconnect(boolean is_connected) {
+        mHandler.sendEmptyMessage(is_connected ?
+                R.string.disconnected :
+                R.string.can_not_connect);
         setConnectingThread(null);
         setConnection(null);
         stopForeground(true);
+
+        Message message = Message.obtain();
+        message.arg1 = is_connected ? 0 : 2;
+        try {
+            messageHandler.send(message);
+        } catch (RemoteException e) {
+            Log.e(TAG, "Can't send from service to client", e);
+        }
     }
 
     private void updateForegroundNotification(final int message) {
