@@ -65,35 +65,35 @@ public class VpnClient extends Activity {
         final SharedPreferences prefs = getSharedPreferences(Prefs.NAME, MODE_PRIVATE);
         serverSpinner.setSelection(prefs.getInt(Prefs.SPINNER_POSITION, 0));
         //isConnected = prefs.getBoolean(Prefs.BUTTON_STATE, false);
-        serverSpinner.setEnabled(!isConnected);
 
         AnimatedVectorDrawable drawable
-                = (AnimatedVectorDrawable) getDrawable(!isConnected ?
-                R.drawable.unlocked_at_start :
-                R.drawable.locked_at_start);
+                = (AnimatedVectorDrawable) getDrawable(R.drawable.unlocked_at_start);
         buttonImageView.setImageDrawable(drawable);
         drawable.start();
         buttonImageView.refreshDrawableState();
-
-
 
         Log.i("ABSOLUTE_PATH", getApplicationContext().getFilesDir().getAbsolutePath());
 
         buttonImageView.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                    if (!isConnected) {
+                    // start lock/unlock animation:
+                    startLockAnimation(mBound, buttonImageView);
+                    serverSpinner.setEnabled(mBound);
+
+                    if (!mBound) {
                         if(!hasInternetConnection()) {
                             Toast.makeText(getApplicationContext(),
                                     "Error: can't access internet",
                                     Toast.LENGTH_LONG).show();
                             return;
                         }
+
                         prefs.edit()
                                 .putString(Prefs.SERVER_ADDRESS, countries.getIpAddresses()[serverSpinner.getSelectedItemPosition()])
                                 .putString(Prefs.SERVER_PORT, countries.getServerPorts()[serverSpinner.getSelectedItemPosition()])
                                 .putInt(Prefs.SPINNER_POSITION, serverSpinner.getSelectedItemPosition())
-                                .putBoolean(Prefs.BUTTON_STATE, !isConnected)
+                                .putBoolean(Prefs.BUTTON_STATE, !mBound)
                                 .commit();
 
                         Intent intent = android.net.VpnService.prepare(VpnClient.this);
@@ -106,11 +106,9 @@ public class VpnClient extends Activity {
                     } else {
                         mService.SetDisconnect();
                         unbindService(mConnection);
+                        mBound = false;
                     }
-                    // start lock/unlock animation:
-                    startLockAnimation(isConnected, buttonImageView);
-                    isConnected = !isConnected;
-                    prefs.edit().putBoolean(Prefs.BUTTON_STATE, isConnected).commit();
+                    prefs.edit().putBoolean(Prefs.BUTTON_STATE, mBound).commit();
             }
         });
     }
