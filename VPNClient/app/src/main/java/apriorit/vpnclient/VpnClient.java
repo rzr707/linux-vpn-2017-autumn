@@ -1,7 +1,9 @@
 package apriorit.vpnclient;
 
 import android.app.Activity;
+import android.content.ComponentName;
 import android.content.Context;
+import android.content.ServiceConnection;
 import android.content.pm.ActivityInfo;
 import android.graphics.drawable.AnimatedVectorDrawable;
 import android.net.ConnectivityManager;
@@ -10,6 +12,7 @@ import android.os.Bundle;
 
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.os.IBinder;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -21,9 +24,11 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 public class VpnClient extends Activity {
+    private CustomVpnService mService;
     private boolean isConnected = false;
     private ImageView buttonImageView;
     private Spinner   serverSpinner;
+    private boolean mBound = false;
 
 
     private final Countries countries = new Countries(new CountryObject[] {
@@ -60,7 +65,6 @@ public class VpnClient extends Activity {
         final SharedPreferences prefs = getSharedPreferences(Prefs.NAME, MODE_PRIVATE);
         serverSpinner.setSelection(prefs.getInt(Prefs.SPINNER_POSITION, 0));
         //isConnected = prefs.getBoolean(Prefs.BUTTON_STATE, false);
-        isConnected = CustomVpnService.connected;
         serverSpinner.setEnabled(!isConnected);
 
         AnimatedVectorDrawable drawable
@@ -100,7 +104,8 @@ public class VpnClient extends Activity {
                             onActivityResult(0, RESULT_OK, null);
                         }
                     } else {
-                        startService(getServiceIntent().setAction(CustomVpnService.ACTION_DISCONNECT));
+                        mService.SetDisconnect();
+                        unbindService(mConnection);
                     }
                     // start lock/unlock animation:
                     startLockAnimation(isConnected, buttonImageView);
@@ -108,7 +113,6 @@ public class VpnClient extends Activity {
                     prefs.edit().putBoolean(Prefs.BUTTON_STATE, isConnected).commit();
             }
         });
-
     }
 
     @Override
@@ -119,9 +123,27 @@ public class VpnClient extends Activity {
     @Override
     protected void onActivityResult(int request, int result, Intent data) {
         if (result == RESULT_OK) {
-            startService(getServiceIntent().setAction(CustomVpnService.ACTION_CONNECT));
+            bindService(getServiceIntent(), mConnection, Context.BIND_AUTO_CREATE);
         }
     }
+
+    /** Defines callbacks for service binding, passed to bindService() */
+    private ServiceConnection mConnection = new ServiceConnection() {
+
+        @Override
+        public void onServiceConnected(ComponentName className,
+                                       IBinder service) {
+            // We've bound to LocalService, cast the IBinder and get LocalService instance
+            CustomVpnService.LocalBinder binder = (CustomVpnService.LocalBinder) service;
+            mService = binder.getService();
+            mBound = true;
+        }
+
+        @Override
+        public void onServiceDisconnected(ComponentName arg0) {
+            mBound = false;
+        }
+    };
 
     private Intent getServiceIntent() {
         return new Intent(this, CustomVpnService.class);

@@ -1,14 +1,12 @@
 package apriorit.vpnclient;
 
-/**
- * Created by ivan on 01.10.2017.
- */
-
 import android.app.Notification;
 import android.app.PendingIntent;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.os.Binder;
 import android.os.Handler;
+import android.os.IBinder;
 import android.os.Message;
 import android.os.ParcelFileDescriptor;
 import android.util.Log;
@@ -23,11 +21,34 @@ import java.util.concurrent.atomic.AtomicReference;
 
 public class CustomVpnService /* renamed from 'VpnService' */ extends android.net.VpnService implements Handler.Callback {
     private static final String TAG = CustomVpnService.class.getSimpleName();
-
-    public static final String ACTION_CONNECT = "apriorit.vpnclient.START";
-    public static final String ACTION_DISCONNECT = "apriorit.vpnclient.STOP";
-    public static boolean connected = false;
     private Handler mHandler;
+    private final IBinder mBinder = new LocalBinder();
+
+    /**
+     * Class used for the client Binder.  Because we know this service always
+     * runs in the same process as its clients, we don't need to deal with IPC.
+     */
+    public class LocalBinder extends Binder {
+        CustomVpnService getService() {
+            // Return this instance of LocalService so clients can call public methods
+            return CustomVpnService.this;
+        }
+    }
+
+    @Override
+    public IBinder onBind(Intent intent) {
+        return mBinder;
+    }
+
+    @Override
+    public boolean onUnbind(Intent intent) {
+        return true;
+    }
+
+    /** method for clients */
+    public void SetDisconnect() {
+        disconnect();
+    }
 
     private static class Connection extends Pair<Thread, ParcelFileDescriptor> {
         public Connection(Thread thread, ParcelFileDescriptor pfd) {
@@ -47,31 +68,16 @@ public class CustomVpnService /* renamed from 'VpnService' */ extends android.ne
         // The handler is only used to show messages.
         if (mHandler == null) {
             mHandler = new Handler(this);
-        }
-
-        // Create the intent to "configure" the connection (just start VpnClient).
-        mConfigureIntent = PendingIntent.getActivity(this, 0, new Intent(this, VpnClient.class),
-                PendingIntent.FLAG_UPDATE_CURRENT);
-    }
-
-    @Override
-    public int onStartCommand(Intent intent, int flags, int startId) {
-        if (intent != null && ACTION_DISCONNECT.equals(intent.getAction())) {
-            disconnect();
-            return START_NOT_STICKY;
-        } else {
             try {
                 connect();
             } catch (WolfSSLException e) {
                 e.printStackTrace();
             }
-            return START_STICKY;
         }
-    }
 
-    @Override
-    public void onDestroy() {
-        disconnect();
+        // Create the intent to "configure" the connection (just start VpnClient).
+        mConfigureIntent = PendingIntent.getActivity(this, 0, new Intent(this, VpnClient.class),
+                PendingIntent.FLAG_UPDATE_CURRENT);
     }
 
     @Override
@@ -122,7 +128,6 @@ public class CustomVpnService /* renamed from 'VpnService' */ extends android.ne
             }
         });
         thread.start();
-        connected = true;
     }
 
     private void setConnectingThread(final Thread thread) {
@@ -149,7 +154,6 @@ public class CustomVpnService /* renamed from 'VpnService' */ extends android.ne
         setConnectingThread(null);
         setConnection(null);
         stopForeground(true);
-        connected = false;
     }
 
     private void updateForegroundNotification(final int message) {
