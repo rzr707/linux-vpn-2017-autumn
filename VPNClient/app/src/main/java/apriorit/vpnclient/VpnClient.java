@@ -54,8 +54,6 @@ public class VpnClient extends Activity{
             mBound = message.arg1 == 1;
             // start lock/unlock animation:
             startLockAnimation(message.arg1, buttonImageView);
-            serverSpinner.setEnabled(!mBound);
-
         }
     }
 
@@ -106,6 +104,7 @@ public class VpnClient extends Activity{
                             .putBoolean(Prefs.BUTTON_STATE, !mBound)
                             .commit();
 
+                    startLockAnimation(3, buttonImageView);
                     Intent intent = android.net.VpnService.prepare(VpnClient.this);
                     if (intent != null) {
                         // start vpn service:
@@ -117,6 +116,7 @@ public class VpnClient extends Activity{
                     mService.SetDisconnect(mBound && button_state);
                     unbindService(mConnection);
                 }
+                serverSpinner.setEnabled(button_state);
                 button_state = !button_state;
                 prefs.edit().putBoolean(Prefs.BUTTON_STATE, mBound).commit();
             }
@@ -158,13 +158,23 @@ public class VpnClient extends Activity{
 
     // animation setting:
     public void startLockAnimation(int lock_type, ImageView view) {
-        AnimatedVectorDrawable drawable
-                = (AnimatedVectorDrawable) getDrawable(lock_type == 0 ?
-                R.drawable.animated_unlock :
-                lock_type == 1 ?
-                        R.drawable.animated_lock :
-                        R.drawable.unlocked_at_start);
-
+        int id = 0;
+        switch(lock_type)
+        {
+            case 0:
+                id = R.drawable.animated_unlock;
+                break;
+            case 1:
+                id = R.drawable.animated_lock;
+                break;
+            case 2:
+                id = R.drawable.unlocked_at_start;
+                break;
+            case 3:
+                id = R.drawable.try_lock;
+                break;
+        }
+        AnimatedVectorDrawable drawable = (AnimatedVectorDrawable) getDrawable(id);
         view.setImageDrawable(drawable);
         drawable.start();
     }

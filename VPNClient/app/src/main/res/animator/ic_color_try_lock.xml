@@ -2,8 +2,8 @@
 <set xmlns:android="http://schemas.android.com/apk/res/android">
     <objectAnimator
         xmlns:android="http://schemas.android.com/apk/res/android"
-        android:duration="1500"
+        android:duration="500"
         android:propertyName="fillColor"
-        android:valueFrom="#ff7800"
-        android:valueTo="#00aa00" />
+        android:valueFrom="#ff0000"
+        android:valueTo="#ff7800" />
 </set>
