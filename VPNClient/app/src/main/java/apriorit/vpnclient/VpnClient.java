@@ -8,6 +8,7 @@ import android.content.pm.ActivityInfo;
 import android.graphics.drawable.AnimatedVectorDrawable;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
+import android.os.Build;
 import android.os.Bundle;
 
 import android.content.Intent;
@@ -32,6 +33,7 @@ public class VpnClient extends Activity{
     private Spinner   serverSpinner;
     private boolean mBound = false;
     private boolean button_state = false;
+    private Intent serviceIntent = null;
 
     private final Countries countries = new Countries(new CountryObject[] {
             new CountryObject(R.drawable.ic_flag_of_france, "France",
@@ -78,11 +80,13 @@ public class VpnClient extends Activity{
         final SharedPreferences prefs = getSharedPreferences(Prefs.NAME, MODE_PRIVATE);
         serverSpinner.setSelection(prefs.getInt(Prefs.SPINNER_POSITION, 0));
 
-        AnimatedVectorDrawable drawable =
-                (AnimatedVectorDrawable) getDrawable(R.drawable.unlocked_at_start);
-        buttonImageView.setImageDrawable(drawable);
-        drawable.start();
-        buttonImageView.refreshDrawableState();
+        if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            AnimatedVectorDrawable drawable =
+                    (AnimatedVectorDrawable) getDrawable(R.drawable.unlocked_at_start);
+            buttonImageView.setImageDrawable(drawable);
+            drawable.start();
+            buttonImageView.refreshDrawableState();
+        }
 
         Log.i("ABSOLUTE_PATH", getApplicationContext().getFilesDir().getAbsolutePath());
 
@@ -135,6 +139,12 @@ public class VpnClient extends Activity{
         }
     }
 
+    @Override
+    protected void onDestroy() {
+        getApplicationContext().unbindService(mConnection);
+        super.onDestroy();
+    }
+
     /** Defines callbacks for service binding, passed to bindService() */
     private ServiceConnection mConnection = new ServiceConnection() {
 
@@ -174,14 +184,12 @@ public class VpnClient extends Activity{
                 id = R.drawable.try_lock;
                 break;
         }
-        AnimatedVectorDrawable drawable = (AnimatedVectorDrawable) getDrawable(id);
-        view.setImageDrawable(drawable);
-        drawable.start();
-    }
 
-    // check textview input
-    public boolean isTextViewEmpty(TextView tv) {
-        return tv.getText().toString().trim().isEmpty();
+        if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            AnimatedVectorDrawable drawable = (AnimatedVectorDrawable) getDrawable(id);
+            view.setImageDrawable(drawable);
+            drawable.start();
+        }
     }
 
     public boolean hasInternetConnection() {
