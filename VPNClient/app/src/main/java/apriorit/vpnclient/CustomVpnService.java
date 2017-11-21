@@ -19,15 +19,21 @@ import android.widget.Toast;
 import com.wolfssl.WolfSSLException;
 
 import java.io.IOException;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 public class CustomVpnService /* renamed from 'VpnService' */ extends android.net.VpnService implements Handler.Callback {
+    public static final  int max_rec_count = 10;
     private static final String TAG = CustomVpnService.class.getSimpleName();
     private Handler mHandler;
     private final IBinder mBinder = new LocalBinder();
     private Messenger messageHandler;
     private boolean already_bind = false; // to use correct messageHandler
+    public ParcelFileDescriptor old_vpn_interface = null;
+
+    private int reconnect_count = 0;
+    private boolean interrupt_reconnect = false;
 
     /**
      * Class used for the client Binder.  Because we know this service always
@@ -58,7 +64,13 @@ public class CustomVpnService /* renamed from 'VpnService' */ extends android.ne
 
     /** method for clients */
     public void SetDisconnect(boolean is_connected) {
-        disconnect(is_connected);
+        SetDisconnectMessage(is_connected ? 0 : 2);
+        disconnect();
+    }
+
+    /** method for clients */
+    public void InterruptReconnect() {
+        interrupt_reconnect = true;
     }
 
     private static class Connection extends Pair<Thread, ParcelFileDescriptor> {
@@ -80,7 +92,7 @@ public class CustomVpnService /* renamed from 'VpnService' */ extends android.ne
         if (mHandler == null) {
             mHandler = new Handler(this);
             try {
-                connect();
+                connect(false);
             } catch (WolfSSLException e) {
                 e.printStackTrace();
             }
@@ -100,11 +112,13 @@ public class CustomVpnService /* renamed from 'VpnService' */ extends android.ne
         return true;
     }
 
-    private void connect() throws WolfSSLException {
+    private void connect(boolean reconnect) throws WolfSSLException {
         // Become a foreground service. Background services can be VPN services too, but they can
         // be killed by background check before getting a chance to receive onRevoke().
-        updateForegroundNotification(R.string.connecting);
-        mHandler.sendEmptyMessage(R.string.connecting);
+        if(!reconnect) {
+            updateForegroundNotification(R.string.connecting);
+            mHandler.sendEmptyMessage(R.string.connecting);
+        }
 
         // Extract information from the shared preferences.
         final SharedPreferences prefs = getSharedPreferences(VpnClient.Prefs.NAME, MODE_PRIVATE);
@@ -131,16 +145,20 @@ public class CustomVpnService /* renamed from 'VpnService' */ extends android.ne
         connection.setConfigureIntent(mConfigureIntent);
         connection.setOnEstablishListener(new apriorit.vpnclient.VpnConnection.OnEstablishListener() {
             public void onEstablish(ParcelFileDescriptor tunInterface) {
-                mHandler.sendEmptyMessage(R.string.connected);
+
+
 
                 mConnectingThread.compareAndSet(thread, null);
                 setConnection(new Connection(thread, tunInterface));
-                Message message = Message.obtain();
-                message.arg1 = 1;
-                try {
-                    messageHandler.send(message);
-                } catch (RemoteException e) {
-                    Log.e(TAG, "Can't send from service to client", e);
+                if(reconnect_count==0) {
+                    mHandler.sendEmptyMessage(R.string.connected);
+                    Message message = Message.obtain();
+                    message.arg1 = 1;
+                    try {
+                        messageHandler.send(message);
+                    } catch (RemoteException e) {
+                        Log.e(TAG, "Can't send from service to client", e);
+                    }
                 }
             }
         });
@@ -166,21 +184,23 @@ public class CustomVpnService /* renamed from 'VpnService' */ extends android.ne
         }
     }
 
-    private void disconnect(boolean is_connected) {
-        mHandler.sendEmptyMessage(is_connected ?
+    private void SetDisconnectMessage(int is_connected) {
+        mHandler.sendEmptyMessage(is_connected == 0 ?
                 R.string.disconnected :
                 R.string.can_not_connect);
-        setConnectingThread(null);
-        setConnection(null);
-        stopForeground(true);
-
         Message message = Message.obtain();
-        message.arg1 = is_connected ? 0 : 2;
+        message.arg1 = is_connected;
         try {
             messageHandler.send(message);
         } catch (RemoteException e) {
             Log.e(TAG, "Can't send from service to client", e);
         }
+    }
+
+    private void disconnect() {
+        setConnectingThread(null);
+        setConnection(null);
+        stopForeground(true);
     }
 
     private void updateForegroundNotification(final int message) {
@@ -191,5 +211,36 @@ public class CustomVpnService /* renamed from 'VpnService' */ extends android.ne
                 .setContentText(getString(message))
                 .setContentIntent(mConfigureIntent)
                 .build());
+    }
+    public void SetDefaultRecCount() {
+        reconnect_count = 0;
+    }
+
+    public void Reconnect() {
+        if(interrupt_reconnect) {
+            reconnect_count = max_rec_count;
+            interrupt_reconnect = false;
+            return;
+        }
+        if(reconnect_count < max_rec_count) {
+            reconnect_count++;
+            Log.e(TAG, "Reconnect ");
+            disconnect();
+            try {
+                connect(true);
+            } catch (WolfSSLException e) {
+                e.printStackTrace();
+            }
+        }
+        else {
+            try {
+                if(old_vpn_interface!=null)
+                old_vpn_interface.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            SetDisconnectMessage(3);
+
+        }
     }
 }

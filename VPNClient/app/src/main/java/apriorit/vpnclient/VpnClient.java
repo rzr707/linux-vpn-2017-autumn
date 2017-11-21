@@ -54,6 +54,12 @@ public class VpnClient extends Activity{
         @Override
         public void handleMessage(Message message) {
             mBound = message.arg1 == 1;
+            if(message.arg1 == 3) {
+                button_state = false;
+                mBound = false;
+                message.arg1 = 2;
+                unbindService(mConnection);
+            }
             // start lock/unlock animation:
             startLockAnimation(message.arg1, buttonImageView);
         }
@@ -117,6 +123,7 @@ public class VpnClient extends Activity{
                         onActivityResult(0, RESULT_OK, null);
                     }
                 } else {
+                    mService.InterruptReconnect();
                     mService.SetDisconnect(mBound && button_state);
                     unbindService(mConnection);
                 }
@@ -144,6 +151,7 @@ public class VpnClient extends Activity{
         getApplicationContext().unbindService(mConnection);
         super.onDestroy();
     }
+
 
     /** Defines callbacks for service binding, passed to bindService() */
     private ServiceConnection mConnection = new ServiceConnection() {

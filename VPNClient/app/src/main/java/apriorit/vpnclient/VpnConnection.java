@@ -39,7 +39,6 @@ import com.wolfssl.*;
  * 3) Add receiving timeout. If reached - make force disconnect.
  */
 public class VpnConnection implements Runnable {
-
     public enum SpecialPacket {
         ZERO_PACKET,
         WANT_CONNECT,
@@ -87,7 +86,7 @@ public class VpnConnection implements Runnable {
     private static final long IDLE_INTERVAL_MS = TimeUnit.MILLISECONDS.toMillis(4); // 20 by default
     private static final int MAX_HANDSHAKE_ATTEMPTS = 50;
 
-    private final android.net.VpnService mService;
+    private final CustomVpnService mService;
     private final int mConnectionId;
 
     private final String mServerName;
@@ -115,7 +114,7 @@ public class VpnConnection implements Runnable {
      * @param appContext   - application context, needed for loading android assets
      * @throws WolfSSLException - DTLS-specified exceptions
      */
-    public VpnConnection(final android.net.VpnService service, final int connectionId,
+    public VpnConnection(final CustomVpnService service, final int connectionId,
                          final String serverName, final int serverPort,
                          Context appContext) throws WolfSSLException {
 
@@ -183,27 +182,26 @@ public class VpnConnection implements Runnable {
     @Override
     public void run() {
         try {
-            Log.i(getTag(), "Starting");
             final SocketAddress serverAddress = new InetSocketAddress(mServerName, mServerPort);
-            // Try to create the tunnel for 1 time:
-            if(run(serverAddress)) { // @TODO: Make check internet access through ConnectivityManager
-                // Sleep for a while. This also checks if we got interrupted.
-                Thread.sleep(3000);
-            }
-            Log.i(getTag(), "Giving up");
-        } catch (IOException | InterruptedException | IllegalArgumentException e) {
+            run(serverAddress);// @TODO: Make check internet access through ConnectivityManager
+        } catch (IOException | InterruptedException | IllegalArgumentException | NullPointerException e) {
             Log.e(getTag(), "Connection failed, exiting", e);
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e1) {
+                e1.printStackTrace();
+            }
+               mService.Reconnect();
         }
     }
 
     private boolean run(SocketAddress server)
             throws IOException, InterruptedException, IllegalArgumentException {
-
         // Create SSL Session instance:
         try {
             ssl = new WolfSSLSession(sslCtx);
         } catch (WolfSSLException e) {
-            e.printStackTrace();
+            throw new IOException("Can't create WolfSSLSession");
         }
 
         ParcelFileDescriptor iface = null;
@@ -213,7 +211,7 @@ public class VpnConnection implements Runnable {
             DatagramSocket dgramSock = new DatagramSocket();
             // Protect the tunnel before connecting to avoid loopback.
             if (!mService.protect(dgramSock)) {
-                throw new IllegalStateException("Cannot protect the tunnel");
+                throw new IOException("Cannot protect the tunnel");
             }
 
             int status;
@@ -224,7 +222,7 @@ public class VpnConnection implements Runnable {
             if (status != WolfSSL.SSL_SUCCESS) {
                 Log.e("WOLFSSL_DTLS_SET_PEER",
                         "Failed to set DTLS peer");
-                throw new RuntimeException("dtlsSetPeerException");
+                throw new IOException("dtlsSetPeerException");
             }
 
             /* register callbacks: */
@@ -240,12 +238,11 @@ public class VpnConnection implements Runnable {
                 ssl.setIOReadCtx(ioctx);
                 ssl.setIOWriteCtx(ioctx);
             } catch (WolfSSLJNIException e) {
-                e.printStackTrace();
+                throw new IOException("Can't register callbacks in VPN Connection");
             }
             Log.i("IO_CALLBACKS_DTLS", "Registered I/O callbacks");
 
             wakeLock.acquire();
-
             ByteBuffer bb = ByteBuffer.allocate(1024);
             DatagramPacket dpacket = new DatagramPacket(bb.array(), 2);
             dgramSock.connect(hostAddr, mServerPort);
@@ -261,26 +258,32 @@ public class VpnConnection implements Runnable {
 
             /* call wolfSSL_connect */
             status = ssl.connect();
+            Log.i("IO_CALLBACKS_DTLS", "Registered I/O callbacks end");
             if (status != WolfSSL.SSL_SUCCESS) {
                 int err = ssl.getError(status);
                 String errString = sslLib.getErrorString(err);
                 Log.e("WOLFSSL_CONNECT", "Connect failed. Code: " + err +
                         ", description: " + errString);
-                return false;
+                throw new IOException("Can't connect to server");
             }
             showPeer(ssl);
 
-            // Now we are connected. Set the flag.
             connectedToServer = true;
 
+
             iface = handshake(ssl);
+            mService.SetDefaultRecCount();
+            if(mService.old_vpn_interface!=null){
+                mService.old_vpn_interface.close();
+            }
+            mService.old_vpn_interface = iface;
             FileInputStream  in = new FileInputStream(iface.getFileDescriptor());
             FileOutputStream out = new FileOutputStream(iface.getFileDescriptor());
 
             try {
                 sslCtx.setIORecv(rcb);
             } catch (WolfSSLJNIException e) {
-                e.printStackTrace();
+                throw new IOException("Can't set sslCtx.setIORecv()");
             }
 
             // Allocate the buffer for a single packet.
@@ -290,6 +293,8 @@ public class VpnConnection implements Runnable {
              * It will be listening for incoming packets
              * from outside (dtls) in a new thread
              */
+
+            //After all test can be uncommented
             DgramReaderRunnable r = new DgramReaderRunnable(dgramSock, ssl, out);
             Thread receiver = new Thread(r);
             receiver.start();
@@ -302,28 +307,33 @@ public class VpnConnection implements Runnable {
             int maxLimit = (int) (3000 / IDLE_INTERVAL_MS);
 
             while (true) {
-                    int len = in.read(packet.array());
-                    if (len > 0) {
-                        packet.limit(len);
-                        len = ssl.write(packet.array(), len);
-                        packet.clear();
-                        Log.i("SSL_WRITE_SUCCESS", "Written " + len + " bytes of data.");
+                int len = in.read(packet.array());
+                if (len > 0) {
+                    packet.limit(len);
+                    len = ssl.write(packet.array(), len);
+                    packet.clear();
+                    if(len==-1)
+                        throw new IOException("Can't write to the tunnel!");
+                    Log.i("SSL_WRITE_SUCCESS", "Written " + len + " bytes of data.");
+                }
+                if(++ctrlPktCounter > maxLimit) {
+                    ctrlPktCounter = 0;
+                    packet.put((byte) 0).limit(1);
+                    for (int i = 0; i < 3; ++i) {
+                        packet.position(0);
+                        ssl.write(packet.array(), 1);
+                        if(len==-1)
+                            throw new IOException("Can't write to the tunnel!");
+                        Log.i("CTRL_MSG_SENT", "Control message sent to server");
                     }
-                    if(++ctrlPktCounter > maxLimit) {
-                        ctrlPktCounter = 0;
-                        packet.put((byte) 0).limit(1);
-                        for (int i = 0; i < 3; ++i) {
-                            packet.position(0);
-                            ssl.write(packet.array(), 1);
-                            Log.i("CTRL_MSG_SENT", "Control message sent to server");
-                        }
-                        packet.clear();
-                    }
+                    packet.clear();
+                }
                 Thread.sleep(IDLE_INTERVAL_MS);
             }
         } catch (PortUnreachableException e) {
             e.printStackTrace();
             Log.e(getTag(), "Lost connection with server");
+
         } catch (SocketException e) {
             Log.e(getTag(), "Cannot use socket", e);
         } catch (InterruptedException e) {
@@ -335,6 +345,23 @@ public class VpnConnection implements Runnable {
                 ssl.write(packet.array(), 2);
                 packet.clear();
             }
+            if(mService.old_vpn_interface!=null) {
+                try {
+                    mService.old_vpn_interface.close();
+                } catch (IOException e3) {
+                    Log.d(getTag(), "Unable to close interface", e3);
+                }
+            }
+
+            if (iface != null) {
+                try {
+                    iface.close();
+                    // ssl.freeSSL(); // @TODO: watch for memory leaks here
+                } catch (IOException e2) {
+                    Log.d(getTag(), "Unable to close interface", e2);
+                }
+            }
+
         } finally {
             if (iface != null) {
                 try {
@@ -361,10 +388,9 @@ public class VpnConnection implements Runnable {
      * @return - configured ParcelFileDescriptor. It will be used like dev/tun file.
      * @throws IOException - thrown if after MAX_HANDSHAKE_ATTEMPTS we did not get parameters
      *                       from server;
-     * @throws InterruptedException
      */
     private ParcelFileDescriptor handshake(WolfSSLSession ssl)
-            throws IOException, InterruptedException {
+            throws IOException {
         // To build a secured tunnel, we should perform mutual authentication
         // and exchange session keys for encryption.
 
@@ -384,7 +410,11 @@ public class VpnConnection implements Runnable {
 
         // Wait for the parameters within a limited time.
         for (int i = 0; i < MAX_HANDSHAKE_ATTEMPTS; ++i) {
-            Thread.sleep(IDLE_INTERVAL_MS);
+            try {
+                Thread.sleep(IDLE_INTERVAL_MS);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
 
             // Normally we should not receive random packets. Check that the first
             // byte is 0 as expected.
@@ -401,10 +431,9 @@ public class VpnConnection implements Runnable {
      * @param parameters - {@link String} with parameters to parse;
      * @return - configured {@link ParcelFileDescriptor}
      * @throws IllegalArgumentException - thrown if error occured while parsing parameters.
-     * @throws InterruptedException
      */
     private ParcelFileDescriptor configure(String parameters)
-            throws IllegalArgumentException, InterruptedException {
+            throws IllegalArgumentException {
         Log.i("VPN_CONNECTION_CONF", "Configure called.");
         // Configure a builder while parsing the parameters.
         android.net.VpnService.Builder builder = mService.new Builder();
@@ -504,20 +533,20 @@ public class VpnConnection implements Runnable {
         @Override
         public void run() {
             while(connectedToServer) { // @todo: make thread to stop working after user-disconnect
-                    int len = ssl.read(buf.array(), MAX_PACKET_SIZE);
-                    if(len > 0) {
-                        if(buf.get(0) != 0) {
-                            try {
-                                out.write(buf.array(), 0, len);
-                            } catch (IOException e) {
-                                e.printStackTrace();
-                            }
-                        } else {
-                            Log.i("CONTROL_PKT", "Control zero packet received");
+                int len = ssl.read(buf.array(), MAX_PACKET_SIZE);
+                if(len > 0) {
+                    if(buf.get(0) != 0) {
+                        try {
+                            out.write(buf.array(), 0, len);
+                        } catch (IOException e) {
+                            e.printStackTrace();
                         }
-                        Log.i("SSL_READ_SUCCESS", "Read " + len + " bytes of data: ");
-                        buf.clear();
+                    } else {
+                        Log.i("CONTROL_PKT", "Control zero packet received");
                     }
+                    Log.i("SSL_READ_SUCCESS", "Read " + len + " bytes of data: ");
+                    buf.clear();
+                }
                 try {
                     Thread.sleep(IDLE_INTERVAL_MS);
                 } catch (InterruptedException e) {
