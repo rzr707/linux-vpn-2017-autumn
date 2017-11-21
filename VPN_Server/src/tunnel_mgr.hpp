@@ -8,6 +8,8 @@
 #include <chrono>   // std::chrono::system_clock::now()
 #include <queue>
 #include <set>
+#include <thread>
+#include <iomanip> // std::put_time
 #include <string.h>
 
 #include <unistd.h> // pid_t
@@ -155,17 +157,6 @@ public:
     }
 
     /**
-     * @brief currentTime
-     * @return string with time in format "<WWW MMM DD hh:mm:ss yyyy>"
-     */
-    static std::string currentTime() {
-        auto currTime = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-        std::string time = std::string() +  "<" + ctime(&currTime);
-        time = time.substr(0, time.length() - 1) + ">";
-        return time;
-    }
-
-    /**
      * @brief initUnixSettings - uplink new p2p tunnel
      *                           (server must be running with root permissions)
      * @param serverTunAddr    - server tunnel ip
@@ -265,7 +256,20 @@ public:
      */
     static void log(const std::string& msg,
                     std::ostream& s = std::cout) {
-        s << currentTime() << ' '
+
+        auto timeNow = std::chrono::system_clock::now();
+        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    timeNow.time_since_epoch()
+                    ) % 1000;
+
+        std::time_t currTime
+                = std::chrono::system_clock::to_time_t(timeNow);
+
+
+        s << std::put_time(std::localtime(&currTime), "<%d.%m.%y %H:%M:%S.")
+          << ms.count() << '>'
+          << " <THREAD ID: " << std::this_thread::get_id()  << '>'
+          << ' '
           << msg << std::endl;
     }
 };
