@@ -39,8 +39,12 @@ import com.wolfssl.*;
  * 3) Add receiving timeout. If reached - make force disconnect.
  */
 public class VpnConnection implements Runnable {
-    private final byte WANT_CONNECT = 1;
-    private final byte WANT_DISCONNECT = 2;
+
+    public enum SpecialPacket {
+        ZERO_PACKET,
+        WANT_CONNECT,
+        WANT_DISCONNECT
+    }
 
     /**
      * Load wolfSSL shared JNI library:
@@ -249,7 +253,7 @@ public class VpnConnection implements Runnable {
             // Send initial packets several times in case of packets loss to
             // init the DTLS connection with server:
             for(int i = 0; i < 4; ++i) {
-                bb.put((byte)0).put(WANT_CONNECT).flip();
+                bb.put((byte)0).put((byte)SpecialPacket.WANT_DISCONNECT.ordinal()).flip();
                 bb.position(0);
                 dgramSock.send(dpacket);
                 bb.clear();
@@ -327,7 +331,7 @@ public class VpnConnection implements Runnable {
             for(int i = 0; i < 4; ++i) {
                 packet.clear();
                 packet.position(0);
-                packet.put((byte)0).put(WANT_DISCONNECT).flip();
+                packet.put((byte)0).put((byte)SpecialPacket.WANT_DISCONNECT.ordinal()).flip();
                 ssl.write(packet.array(), 2);
                 packet.clear();
             }
