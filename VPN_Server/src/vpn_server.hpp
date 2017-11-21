@@ -158,11 +158,6 @@ public:
         // allocate the buffer for a single packet.
         char packet[32767];
         int timer = 0;
-        /** @todo:
-         * When received zero packet from client (packet[0] == 0)
-         * and packet[1] == CLIENT_DISCONNECTED,
-         * then set isClientConnected to false
-         * */
         bool isClientConnected = true;
         bool idle = true;
         int length = 0;
@@ -197,9 +192,6 @@ public:
              * in a new thread: */
             std::thread thr(&VPNServer::createNewConnection, this);
             thr.detach();
-
-            // put the tunnel into non-blocking mode.
-            fcntl(tunnel.first, F_SETFL, O_NONBLOCK);
             
             // send the parameters several times in case of packet loss.
             for (int i = 0; i < 3; ++i) {
@@ -265,7 +257,7 @@ public:
 
                     } else {
                         TunnelManager::log("Recieved empty control msg from client");
-                        if(packet[1] == CLIENT_WANT_DISCONNECT) {
+                        if(packet[1] == CLIENT_WANT_DISCONNECT && length == 2) {
                             TunnelManager::log("WANT_DISCONNECT from client");
                             isClientConnected = false;
                         }
@@ -513,13 +505,26 @@ public:
         // connect to the client
         connect(tunnel, (sockaddr *)&addr, addrlen);
 
+        // put the tunnel into non-blocking mode.
+        fcntl(tunnel, F_SETFL, O_NONBLOCK);
+
         /* set the session ssl to client connection port */
         wolfSSL_set_fd(ssl, tunnel);
         wolfSSL_set_using_nonblock(ssl, 1);
 
-        if(wolfSSL_accept(ssl) != SSL_SUCCESS) {
+        int acceptStatus = SSL_FAILURE;
+        int tryCounter   = 1;
+
+        // Try to accept ssl connection for 50 times:
+        while( (acceptStatus = wolfSSL_accept(ssl)) != SSL_SUCCESS
+              && tryCounter++ <= 50) {
+            TunnelManager::log("wolfSSL_accept(ssl) != SSL_SUCCESS. Sleeping..");
+            std::this_thread::sleep_for(std::chrono::microseconds(200000));
+        }
+
+        if(tryCounter >= 50) {
             wolfSSL_free(ssl);
-            std::pair<int, WOLFSSL*>(-1, nullptr);
+            return get_tunnel(port);
         }
 
         return std::pair<int, WOLFSSL*>(tunnel, ssl);
