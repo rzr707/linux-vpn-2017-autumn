@@ -125,11 +125,9 @@ public:
 
         std::thread t(&VPNServer::createNewConnection, this);
         t.detach();
+
         while(true) {
-            getline(std::cin, input);
-            if(input == "exitvpn") {
-                break;
-            }
+            std::this_thread::sleep_for(std::chrono::seconds(100));
         }
         TunnelManager::log("Closing the VPN Server...");
     }
