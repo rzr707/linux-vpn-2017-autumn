@@ -116,10 +116,8 @@ public:
      * revert system settings, exit the application.\r\n
      */
     void initConsoleInput() {
-        std::string input;
-
         mutex.lock();
-            std::cout << "\033[4;32mType 'exitvpn' in terminal to close VPN Server(DTLS ver.)\033[0m"
+            std::cout << "\033[4;32mVPN Service is started (DTLS, ver.23.11.17)\033[0m"
                       << std::endl;
         mutex.unlock();
 
@@ -129,7 +127,6 @@ public:
         while(true) {
             std::this_thread::sleep_for(std::chrono::seconds(100));
         }
-        TunnelManager::log("Closing the VPN Server...");
     }
 
     /**
@@ -321,7 +318,7 @@ public:
             return;
         }
         TunnelManager::log("Cannot create tunnels", std::cerr);
-        exit(1);
+        throw std::runtime_error("Cannot create tunnels");
     }
     
     /**
@@ -371,7 +368,8 @@ public:
                                port +
                                "). Terminating . . .",
                                std::cerr);
-            exit(1);
+            throw std::invalid_argument(
+                        "Error: invalid number of port " + port);
         }
 
         for(int i = 2; i < argc; ++i) {
@@ -441,7 +439,8 @@ public:
             TunnelManager::log("Cannot get TUN interface\nStatus is: " +
                                status,
                                std::cerr);
-            exit(1);
+            throw std::runtime_error("Cannot get TUN interface\nStatus is: " +
+                                     status);
         }
 
         return interface;
@@ -470,8 +469,7 @@ public:
 
         /* Create the WOLFSSL Object */
         if ((ssl = wolfSSL_new(ctx)) == NULL) {
-            printf("wolfSSL_new error.\n");
-            exit(1);
+            throw std::runtime_error("wolfSSL_new error.");
         }
         setsockopt(tunnel, SOL_SOCKET, SO_REUSEADDR, &flag, sizeof(flag));
         flag = 0;
@@ -543,26 +541,31 @@ public:
 
         /* Set ctx to DTLS 1.2 */
         if ((ctx = wolfSSL_CTX_new(wolfDTLSv1_2_server_method())) == NULL) {
-            printf("wolfSSL_CTX_new error.\n");
-            exit(1);
+            throw std::runtime_error("wolfSSL_CTX_new error.");
         }
         /* Load CA certificates */
         if (wolfSSL_CTX_load_verify_locations(ctx, caCertLoc, 0) !=
                 SSL_SUCCESS) {
-            printf("Error loading %s, please check the file.\n", caCertLoc);
-            exit(1);
+            throw std::runtime_error(std::string() +
+                                     "Error loading " +
+                                     caCertLoc +
+                                     "please check if the file exists");
         }
         /* Load server certificates */
         if (wolfSSL_CTX_use_certificate_file(ctx, servCertLoc, SSL_FILETYPE_PEM) !=
                                                                      SSL_SUCCESS) {
-            printf("Error loading %s, please check the file.\n", servCertLoc);
-            exit(1);
+            throw std::runtime_error(std::string() +
+                                     "Error loading " +
+                                     servCertLoc +
+                                     "please check if the file exists");
         }
         /* Load server Keys */
         if (wolfSSL_CTX_use_PrivateKey_file(ctx, servKeyLoc,
                     SSL_FILETYPE_PEM) != SSL_SUCCESS) {
-            printf("Error loading %s, please check the file.\n", servKeyLoc);
-            exit(1);
+            throw std::runtime_error(std::string() +
+                                     "Error loading " +
+                                     servKeyLoc +
+                                     "please check if the file exists");
         }
     }
 
