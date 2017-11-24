@@ -4,9 +4,21 @@ This is an VPN application that provides creating virtual private network betwee
 
 # Server side
 
-The server application is runned like daemon (service). It has to be installed on UNIX-specified operating systems, such like Ubuntu, Debian etc.
+The server application is runned like daemon (service). It has to be installed on UNIX-specified operating systems, such like Ubuntu, Debian etc. You can install precompiled VPN server (package is stored at VPN_Server/debpackage/ directory) and run it like a daemon or compile it by yourself and run it from terminal manager such like 'tmux'.
 
-## Server side installation
+## .deb package installation
+
+To install precompiled debian package you need to execute this command in terminal (with root privileges in directory with .deb package):
+
+  * apt-get install -y systemd && dpkg -i apriorit-vpnservice_1.0-1_amd64.deb
+
+After this VPN server will be runned like a daemon. To stop daemon use this command:
+
+  * systemctl stop apriorit-vpnservice.service
+
+If you need to reconfigure server run parameters, edit file "/etc/systemd/system/apriorit-vpnservice.service" . The parameters and default values are listed in this readme below. After edit you have to restart service or reboot the system.
+
+## Server side building
 
 1. Fetch dependent wolfssl and wolfssljni libraries (run from root repo dir).
 
