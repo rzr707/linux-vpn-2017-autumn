@@ -61,7 +61,7 @@
                 android:layout_height="200dp"
                 android:layout_weight="1"
                 android:adjustViewBounds="false"
-                android:src="@android:drawable/presence_online"></ImageView>
+                android:src="@drawable/lock"></ImageView>
 
             <Space
                 android:layout_width="50dp"

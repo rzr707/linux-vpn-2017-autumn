@@ -176,27 +176,31 @@ public class VpnClient extends Activity{
 
     // animation setting:
     public void startLockAnimation(int lock_type, ImageView view) {
+        boolean isLowerThanLollipop = Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP;
         int id = 0;
         switch(lock_type)
         {
             case 0:
-                id = R.drawable.animated_unlock;
+                id = isLowerThanLollipop ? R.drawable.lock : R.drawable.animated_unlock;
                 break;
             case 1:
-                id = R.drawable.animated_lock;
+                id = isLowerThanLollipop ? R.drawable.green_lock : R.drawable.animated_lock;
                 break;
             case 2:
-                id = R.drawable.unlocked_at_start;
+                id = isLowerThanLollipop ? R.drawable.lock : R.drawable.unlocked_at_start;
                 break;
             case 3:
-                id = R.drawable.try_lock;
+                id = isLowerThanLollipop ? R.drawable.orange_lock : R.drawable.try_lock;
                 break;
         }
 
-        if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             AnimatedVectorDrawable drawable = (AnimatedVectorDrawable) getDrawable(id);
             view.setImageDrawable(drawable);
             drawable.start();
+        } else {
+            buttonImageView.setImageResource(id);
+            buttonImageView.refreshDrawableState();
         }
     }
 
@@ -212,7 +216,6 @@ public class VpnClient extends Activity{
         }
 
         public View getCustomView(int pos, View convertView, ViewGroup parent) {
-            // inflating the layout for the custom spinner:
             LayoutInflater inflater = getLayoutInflater();
             View layout = inflater.inflate(R.layout.custom_spinner_object,
                     parent,

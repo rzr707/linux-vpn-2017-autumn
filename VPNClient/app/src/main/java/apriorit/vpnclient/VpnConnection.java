@@ -183,7 +183,7 @@ public class VpnConnection implements Runnable {
     public void run() {
         try {
             final SocketAddress serverAddress = new InetSocketAddress(mServerName, mServerPort);
-            run(serverAddress);// @TODO: Make check internet access through ConnectivityManager
+            run(serverAddress);
         } catch (IOException | InterruptedException | IllegalArgumentException | NullPointerException e) {
             Log.e(getTag(), "Connection failed, exiting", e);
             try {
@@ -357,7 +357,6 @@ public class VpnConnection implements Runnable {
             if (iface != null) {
                 try {
                     iface.close();
-                    // ssl.freeSSL(); // @TODO: watch for memory leaks here
                 } catch (IOException e2) {
                     Log.d(getTag(), "Unable to close interface", e2);
                 }
@@ -526,7 +525,7 @@ public class VpnConnection implements Runnable {
 
         @Override
         public void run() {
-            while(connectedToServer) { // @todo: make thread to stop working after user-disconnect
+            while(connectedToServer) {
                 int len = ssl.read(buf.array(), MAX_PACKET_SIZE);
                 if(len > 0) {
                     if(buf.get(0) != 0) {
