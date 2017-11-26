@@ -66,6 +66,14 @@ public class CustomVpnService /* renamed from 'VpnService' */ extends android.ne
     public void SetDisconnect(boolean is_connected) {
         SetDisconnectMessage(is_connected ? 0 : 2);
         disconnect();
+
+        if(old_vpn_interface != null) {
+            try {
+                old_vpn_interface.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
     }
 
     /** method for clients */
@@ -175,12 +183,12 @@ public class CustomVpnService /* renamed from 'VpnService' */ extends android.ne
     private void setConnection(final Connection connection) {
         final Connection oldConnection = mConnection.getAndSet(connection);
         if (oldConnection != null) {
-            try {
+          //  try {
                 oldConnection.first.interrupt();
-                oldConnection.second.close();
-            } catch (IOException e) {
-                Log.e(TAG, "Closing VPN interface", e);
-            }
+               // oldConnection.second.close();
+          //  } catch (IOException e) {
+            //    Log.e(TAG, "Closing VPN interface", e);
+            //}
         }
     }
 
@@ -235,7 +243,7 @@ public class CustomVpnService /* renamed from 'VpnService' */ extends android.ne
         else {
             try {
                 if(old_vpn_interface!=null)
-                old_vpn_interface.close();
+                    old_vpn_interface.close();
             } catch (IOException e) {
                 e.printStackTrace();
             }
