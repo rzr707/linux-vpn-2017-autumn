@@ -238,7 +238,7 @@ public class VpnConnection implements Runnable {
             // Send initial packets several times in case of packets loss to
             // init the DTLS connection with server:
             for(int i = 0; i < 4; ++i) {
-                bb.put((byte)0).put((byte)SpecialPacket.WANT_DISCONNECT.ordinal()).flip();
+                bb.put((byte)0).put((byte)SpecialPacket.WANT_CONNECT.ordinal()).flip();
                 bb.position(0);
                 dgramSock.send(dpacket);
                 bb.clear();

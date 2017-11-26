@@ -1,0 +1,5 @@
+# Ignore Qt Creator user profile settings files:
+*.pro.user
+*.pro.user.*
+*.qbs.user
+*.qbs.user.*

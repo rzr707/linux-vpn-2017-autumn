@@ -464,6 +464,8 @@ public:
         int flag = 1;
          // receive packets till the secret matches.
         char packet[1024];
+        memset(packet, 0, sizeof(packet[0] * 1024));
+
         socklen_t addrlen;
         WOLFSSL* ssl;
 
@@ -492,11 +494,22 @@ public:
         addrlen = sizeof(addr);
         int recievedLen = 0;
         do {
+            recievedLen = 0;
             recievedLen = recvfrom(tunnel, packet, sizeof(packet), 0,
                                   (sockaddr *)&addr, &addrlen);
-        } while (recievedLen <= 0 ||
-                 (packet[0] != ZERO_PACKET && packet[1] != CLIENT_WANT_CONNECT)
-                 );
+            /*
+            TunnelManager::log("packet[0] == " +
+                               std::to_string(packet[0]) +
+                               ", packet[1] == " +
+                               std::to_string(packet[1]) +
+                               ", receivecLen == " + std::to_string(recievedLen));
+            */
+            if(recievedLen == 2
+               && packet[0] == ZERO_PACKET
+               && packet[1] == CLIENT_WANT_CONNECT)
+                  break;
+
+        } while (true);
 
         // connect to the client
         connect(tunnel, (sockaddr *)&addr, addrlen);
