@@ -70,16 +70,6 @@ public class VpnConnection implements Runnable {
     /** Maximum packet size is constrained by the MTU, which is given as a signed short. */
     private static final int MAX_PACKET_SIZE = Short.MAX_VALUE / 2 - 1;
 
-    /** Time to wait in between losing the connection and retrying. */
-    private static final long RECONNECT_WAIT_MS = TimeUnit.SECONDS.toMillis(3);
-
-    /** Time between keepalives if there is no traffic at the moment.
-     **/
-    private static final long KEEPALIVE_INTERVAL_MS = TimeUnit.SECONDS.toMillis(5);
-
-    /** Time to wait without receiving any response before assuming the server is gone. */
-    private static final long RECEIVE_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(200);
-
     /**
      * Time between polling the VPN interface for new traffic
      */
@@ -149,7 +139,6 @@ public class VpnConnection implements Runnable {
         mServerPort= serverPort;
 
         sslLib = new WolfSSL();
-        sslLib.setLoggingCb(new MyLoggingCallback()); // @todo: remove this (useless)
 
         // Configure SSL Context for DTLS connections:
         sslCtx = new WolfSSLContext(WolfSSL.DTLSv1_2_ClientMethod());

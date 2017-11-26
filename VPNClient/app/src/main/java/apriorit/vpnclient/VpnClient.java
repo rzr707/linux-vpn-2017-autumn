@@ -33,7 +33,6 @@ public class VpnClient extends Activity{
     private Spinner   serverSpinner;
     private boolean mBound = false;
     private boolean button_state = false;
-    private Intent serviceIntent = null;
 
     private final Countries countries = new Countries(new CountryObject[] {
             new CountryObject(R.drawable.ic_flag_of_france, "France",
@@ -249,62 +248,4 @@ public class VpnClient extends Activity{
         }
     }
 
-    public class Countries {
-        private CountryObject[] countries;
-
-        public Countries(CountryObject[] countries) {
-            this.countries = countries;
-        }
-
-        public Integer[] getCountriesIds() {
-            Integer[] result = new Integer[countries.length];
-            for(int i = 0; i < countries.length; ++i) {
-                result[i] = countries[i].getFlagId();
-            }
-            return result;
-        }
-
-        public String[] getCountriesNames() {
-            String[] result = new String[countries.length];
-            for(int i = 0; i < countries.length; ++i) {
-                result[i] = countries[i].getCountryName();
-            }
-            return result;
-        }
-
-        public String[] getIpAddresses() {
-            String[] result = new String[countries.length];
-            for(int i = 0; i < countries.length; ++i) {
-                result[i] = countries[i].getIpAddr();
-            }
-            return result;
-        }
-
-        public String[] getServerPorts() {
-            String[] result = new String[countries.length];
-            for(int i = 0; i < countries.length; ++i) {
-                result[i] = countries[i].getPort();
-            }
-            return result;
-        }
-    }
-
-    public class CountryObject {
-        private int    flagId;
-        private String countryName;
-        private String ipAddr;
-        private String port;
-
-        public CountryObject(int flagId, String countryName, String ipAddr, String port) {
-            this.flagId = flagId;
-            this.countryName = countryName;
-            this.ipAddr = ipAddr;
-            this.port = port;
-        }
-
-        public int getFlagId()         { return flagId;      }
-        public String getCountryName() { return countryName; }
-        public String getIpAddr()      { return ipAddr;      }
-        public String getPort()        { return port;        }
-    }
 }
