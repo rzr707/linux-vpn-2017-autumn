@@ -191,7 +191,7 @@ public class VpnConnection implements Runnable {
             } catch (InterruptedException e1) {
                 e1.printStackTrace();
             }
-               mService.Reconnect();
+            mService.Reconnect();
         }
     }
 
@@ -254,6 +254,7 @@ public class VpnConnection implements Runnable {
                 bb.position(0);
                 dgramSock.send(dpacket);
                 bb.clear();
+                Thread.sleep(100);
             }
 
             /* call wolfSSL_connect */
@@ -363,14 +364,7 @@ public class VpnConnection implements Runnable {
             }
 
         } finally {
-            if (iface != null) {
-                try {
-                    iface.close();
-                    // ssl.freeSSL(); // @TODO: watch for memory leaks here
-                } catch (IOException e) {
-                    Log.e(getTag(), "Unable to close interface", e);
-                }
-            }
+
             connectedToServer = false;
 
             // free wakeLock to prevent battery draining:
