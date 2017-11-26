@@ -171,7 +171,8 @@ public class VpnConnection implements Runnable {
     @Override
     public void run() {
         try {
-            final SocketAddress serverAddress = new InetSocketAddress(mServerName, mServerPort);
+            final InetSocketAddress serverAddress
+                    = new InetSocketAddress(InetAddress.getByName(mServerName), mServerPort);
             run(serverAddress);
         } catch (IOException | InterruptedException | IllegalArgumentException | NullPointerException e) {
             Log.e(getTag(), "Connection failed, exiting", e);
@@ -184,7 +185,7 @@ public class VpnConnection implements Runnable {
         }
     }
 
-    private boolean run(SocketAddress server)
+    private boolean run(InetSocketAddress server)
             throws IOException, InterruptedException, IllegalArgumentException {
         // Create SSL Session instance:
         try {
@@ -204,10 +205,8 @@ public class VpnConnection implements Runnable {
             }
 
             int status;
-            final InetAddress hostAddr = InetAddress.getByName(mServerName);
-            final InetSocketAddress serverAddress = new InetSocketAddress(hostAddr, mServerPort);
 
-            status = ssl.dtlsSetPeer(serverAddress);
+            status = ssl.dtlsSetPeer(server);
             if (status != WolfSSL.SSL_SUCCESS) {
                 Log.e("WOLFSSL_DTLS_SET_PEER",
                         "Failed to set DTLS peer");
@@ -219,7 +218,7 @@ public class VpnConnection implements Runnable {
             MyRecvCallback rcb = new MyRecvCallback();
             MySendCallback scb = new MySendCallback();
             MyIOCtx ioctx = new MyIOCtx(dtlsOutputStream, dtlsInputStream, dgramSock,
-                    hostAddr, mServerPort);
+                    server.getAddress(), mServerPort);
 
             try {
                 sslCtx.setIORecv(connCallback);
@@ -234,7 +233,7 @@ public class VpnConnection implements Runnable {
             wakeLock.acquire();
             ByteBuffer bb = ByteBuffer.allocate(1024);
             DatagramPacket dpacket = new DatagramPacket(bb.array(), 2);
-            dgramSock.connect(hostAddr, mServerPort);
+            dgramSock.connect(server.getAddress(), mServerPort);
 
             // Send initial packets several times in case of packets loss to
             // init the DTLS connection with server:
