@@ -6,7 +6,8 @@ CONFIG -= qt
 SOURCES += src/main.cpp
 
 LIBS += -L/usr/local/lib -lgtest \
-        -lpthread
+        -lpthread \
+        -lwolfssl
 
 HEADERS += \
     src/tunnel_mgr_test.hpp \

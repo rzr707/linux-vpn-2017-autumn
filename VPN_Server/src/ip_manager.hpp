@@ -129,22 +129,6 @@ public:
         return ipaddr;
     }
 
-    // ntohl
-    in_addr_t ipToUint(std::string ip) {
-        int a, b, c, d;
-        in_addr_t addr = 0;
-
-        if(sscanf(ip.c_str(), "%d.%d.%d.%d", &a, &b, &c, &d) != 4) {
-            throw std::runtime_error("ipToUint: error");
-        }
-
-        addr =  a << 24;
-        addr |= b << 16;
-        addr |= c << 8;
-        addr |= d;
-        return addr;
-    }
-
     // wrong capacity if the mask is "255.255.255.255"
     uint32_t networkCapacity() {
         in_addr_t lowerBound = ntohl((networkAddress & netmask));

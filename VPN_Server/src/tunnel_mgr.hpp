@@ -39,48 +39,10 @@ public:
     /* Forbid creating default copy ctor: */
     TunnelManager(TunnelManager& that) = delete;
 
-    explicit TunnelManager() : tunNumber(0) {
-        // DelTunFromFile("", true);
-    }
+    explicit TunnelManager() : tunNumber(0) { }
 
     ~TunnelManager() {
         cleanupTunnels("vpn_tun");
-    }
-
-    void write(const std::string& filename,
-               const std::string& infoToWrite) {
-        file.open(filename, std::ios_base::out | std::ios_base::app);
-        if(!file.is_open()) {
-            throw std::runtime_error(std::string() +
-                                     "Could not open file to write: " +
-                                     filename);
-        }
-        file << infoToWrite << std::endl;
-        file.close();
-    }
-
-    std::list<std::string> getInfoList
-    (const char* filename) {
-        file.open(filename, std::ios_base::in);
-        if(!file.is_open()) {
-            throw std::runtime_error(std::string() +
-                                     "Could not open file to read:" +
-                                     filename);
-        }
-        std::list<std::string> list;
-        std::string line;
-        while(getline(file, line)) {
-            list.push_back(line);
-        }
-        file.close();
-
-        return list;
-    }
-
-    void cleanFile(const char* filename) {
-        file.open(filename,
-                  std::ios_base::out | std::ios_base::trunc);
-        file.close();
     }
 
     /**
@@ -126,21 +88,6 @@ public:
         }
     }
 
-    void killProcess(const std::string& procId) {
-        kill(atoi(procId.c_str()), SIGINT);
-    }
-
-    void killAllProcesses(const std::list<std::string>& procList) {
-        for(const std::string& s : procList) {
-            TunnelManager::log("Killing process with PID " + s);
-            if(s != std::to_string(getpid())) {
-                killProcess(s);
-            } else {
-                TunnelManager::log("No need to kill parent process");
-            }
-        }
-    }
-
     /**
      * @brief getTunNumber
      * @return the number of tunnel to create it
@@ -178,7 +125,6 @@ public:
         std::string ifconfig = "ifconfig " + tunName + " " + serverTunAddr +
                           " dstaddr " + clientTunAddr + " up";
         execTerminalCommand(ifconfig);
-        // SaveTunToFile(tunName);
     }
     
 
