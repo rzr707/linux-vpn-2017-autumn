@@ -30,6 +30,8 @@
 #include <wolfssl/ssl.h>
 #include <sys/time.h>
 
+#include <memory>
+
 /**
  * @brief The VPNServer class<br>
  * Main application class that<br>
@@ -115,7 +117,7 @@ public:
      * If input string is 'exitpvn' - close all tunnels,\r\n
      * revert system settings, exit the application.\r\n
      */
-    void initConsoleInput() {
+    void initServer() {
         mutex.lock();
             std::cout << "\033[4;32mVPN Service is started (DTLS, ver.23.11.17)\033[0m"
                       << std::endl;
@@ -172,9 +174,11 @@ public:
         // Get TUN interface.
         interface = get_interface(tunStr.c_str());
 
-        // fill array with parameters to send:
-        buildParameters(clientIpStr);
         mutex.unlock();
+
+
+        // fill array with parameters to send:
+        std::unique_ptr<ClientParameters> cliParams(buildParameters(clientIpStr));
 
         // wait for a tunnel.
         while ((tunnel = get_tunnel(port.c_str())).first != -1
@@ -182,17 +186,12 @@ public:
                tunnel.second != nullptr) {
 
             TunnelManager::log("New client connected to [" + tunStr + "]");
-
-            /* if client is connected then run another instance of connection
-             * in a new thread: */
-            std::thread thr(&VPNServer::createNewConnection, this);
-            thr.detach();
             
             // send the parameters several times in case of packet loss.
             for (int i = 0; i < 3; ++i) {
                 sentParameters =
-                    wolfSSL_send(tunnel.second, cliParams.parametersToSend,
-                                 sizeof(cliParams.parametersToSend),
+                    wolfSSL_send(tunnel.second, cliParams->parametersToSend,
+                                 sizeof(cliParams->parametersToSend),
                                  MSG_NOSIGNAL);
 
                 if(sentParameters < 0) {
@@ -402,23 +401,25 @@ public:
     }
 
     /**
-     * @brief buildParameters fills
-     * 'parametersToSend' array with info
-     *  which will be sent to client.
-     * @param clientIp - IP-address string to send to client
+     * @brief buildParameters
+     * @param clientIp - Client's tunnel IP address
+     * @return         - pointer to ClientParameters structure
+     * with filled parameters to send to the client.
      */
-    void buildParameters(const std::string& clientIp) {
-
-        int size = sizeof(cliParams.parametersToSend);
+    ClientParameters* buildParameters(const std::string& clientIp) {
+        ClientParameters* cliParams = new ClientParameters;
+        int size = sizeof(cliParams->parametersToSend);
         // Here is parameters string formed:
-        std::string paramStr = std::string() + "m," + cliParams.mtu +
-                " a," + clientIp + ",32 d," + cliParams.dnsIp +
-                " r," + cliParams.routeIp + "," + cliParams.routeMask;
+        std::string paramStr = std::string() + "m," + this->cliParams.mtu +
+                " a," + clientIp + ",32 d," + this->cliParams.dnsIp +
+                " r," + this->cliParams.routeIp + "," + this->cliParams.routeMask;
 
         // fill parameters array:
-        cliParams.parametersToSend[0] = 0; // control messages always start with zero
-        memcpy(&cliParams.parametersToSend[1], paramStr.c_str(), paramStr.length());
-        memset(&cliParams.parametersToSend[paramStr.length() + 1], ' ', size - (paramStr.length() + 1));
+        cliParams->parametersToSend[0] = 0; // control messages always start with zero
+        memcpy(&cliParams->parametersToSend[1], paramStr.c_str(), paramStr.length());
+        memset(&cliParams->parametersToSend[paramStr.length() + 1], ' ', size - (paramStr.length() + 1));
+
+        return cliParams;
     }
 
     /**
@@ -510,6 +511,11 @@ public:
                   break;
 
         } while (true);
+
+        /* if client is connected then run another instance of connection
+         * in a new thread: */
+        std::thread thr(&VPNServer::createNewConnection, this);
+        thr.detach();
 
         // connect to the client
         connect(tunnel, (sockaddr *)&addr, addrlen);

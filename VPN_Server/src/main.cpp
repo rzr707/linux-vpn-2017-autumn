@@ -44,9 +44,8 @@ int main(int argc, char **argv) {
         return EXIT_FAILURE;
     }
 
-    // will add try-catch here:
     VPNServer server(argc, argv);
-    server.initConsoleInput();
+    server.initServer();
 
     return EXIT_SUCCESS;
 }
