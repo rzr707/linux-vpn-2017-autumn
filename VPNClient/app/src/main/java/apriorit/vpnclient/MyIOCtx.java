@@ -1,9 +1,5 @@
 package apriorit.vpnclient;
 
-/**
- * Created by admin on 29.10.2017.
- */
-
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.net.DatagramSocket;

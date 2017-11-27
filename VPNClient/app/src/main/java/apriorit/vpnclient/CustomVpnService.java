@@ -19,21 +19,29 @@ import android.widget.Toast;
 import com.wolfssl.WolfSSLException;
 
 import java.io.IOException;
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 public class CustomVpnService /* renamed from 'VpnService' */ extends android.net.VpnService implements Handler.Callback {
+    public static final int BIND_SIGNAL = 0;
+    public static final int UNBIND_SIGNAL = 1;
+    public static final int SIGNAL_SUCCESS_DISCONNECT = 2;
+    public static final int SIGNAL_SUCCESS_CONNECT = 3;
+    public static final int SIGNAL_FAIL_CONNECT = 4;
+    public static final int SIGNAL_SERVICE_STOP = 5;
     public static final  int max_rec_count = 10;
     private static final String TAG = CustomVpnService.class.getSimpleName();
-    private Handler mHandler;
+    private Handler mHandler = null;
     private final IBinder mBinder = new LocalBinder();
-    private Messenger messageHandler;
+    private Messenger messageHandler = null;
     private boolean already_bind = false; // to use correct messageHandler
+    private boolean already_unbind = false;
+    public boolean service_can_be_closed = false;
+    private boolean already_show_connect = false;
     public ParcelFileDescriptor old_vpn_interface = null;
 
     private int reconnect_count = 0;
-    private boolean interrupt_reconnect = false;
+    private boolean interrupt = false;
 
     /**
      * Class used for the client Binder.  Because we know this service always
@@ -59,12 +67,20 @@ public class CustomVpnService /* renamed from 'VpnService' */ extends android.ne
 
     @Override
     public boolean onUnbind(Intent intent) {
+        if(!already_unbind) {
+            already_show_connect = false;
+            SendMessage(UNBIND_SIGNAL);
+            already_unbind = true;
+        }
         return true;
     }
 
-    /** method for clients */
-    public void SetDisconnect(boolean is_connected) {
-        SetDisconnectMessage(is_connected ? 0 : 2);
+    public void SetDisconnect(int signal) {
+        if(interrupt)
+            return;
+
+        interrupt = true;
+        SetDisconnectMessage(signal);
         disconnect();
 
         if(old_vpn_interface != null) {
@@ -76,9 +92,26 @@ public class CustomVpnService /* renamed from 'VpnService' */ extends android.ne
         }
     }
 
-    /** method for clients */
-    public void InterruptReconnect() {
-        interrupt_reconnect = true;
+    public void SendWaitMessage() {
+        mHandler.sendEmptyMessage(R.string.wait);
+    }
+
+    public void SendCanBeClosed() {
+        if(service_can_be_closed)
+                return;
+        SendMessage(BIND_SIGNAL);
+        service_can_be_closed = true;
+    }
+
+    private void SendMessage(int signal)
+    {
+        Message message = Message.obtain();
+        message.arg1 = signal;
+        try {
+            messageHandler.send(message);
+        } catch (RemoteException e) {
+            Log.e(TAG, "Can't send from service to client", e);
+        }
     }
 
     private static class Connection extends Pair<Thread, ParcelFileDescriptor> {
@@ -153,21 +186,14 @@ public class CustomVpnService /* renamed from 'VpnService' */ extends android.ne
         connection.setConfigureIntent(mConfigureIntent);
         connection.setOnEstablishListener(new apriorit.vpnclient.VpnConnection.OnEstablishListener() {
             public void onEstablish(ParcelFileDescriptor tunInterface) {
-
-
-
                 mConnectingThread.compareAndSet(thread, null);
                 setConnection(new Connection(thread, tunInterface));
-                if(reconnect_count==0) {
+                if(!already_show_connect) {
                     mHandler.sendEmptyMessage(R.string.connected);
-                    Message message = Message.obtain();
-                    message.arg1 = 1;
-                    try {
-                        messageHandler.send(message);
-                    } catch (RemoteException e) {
-                        Log.e(TAG, "Can't send from service to client", e);
-                    }
+                    already_show_connect = true;
+                    SendMessage(SIGNAL_SUCCESS_CONNECT);
                 }
+                SendCanBeClosed();
             }
         });
         thread.start();
@@ -182,27 +208,15 @@ public class CustomVpnService /* renamed from 'VpnService' */ extends android.ne
 
     private void setConnection(final Connection connection) {
         final Connection oldConnection = mConnection.getAndSet(connection);
-        if (oldConnection != null) {
-          //  try {
+        if (oldConnection != null)
                 oldConnection.first.interrupt();
-               // oldConnection.second.close();
-          //  } catch (IOException e) {
-            //    Log.e(TAG, "Closing VPN interface", e);
-            //}
-        }
     }
 
-    private void SetDisconnectMessage(int is_connected) {
-        mHandler.sendEmptyMessage(is_connected == 0 ?
+    private void SetDisconnectMessage(int signal) {
+        mHandler.sendEmptyMessage(signal == SIGNAL_SUCCESS_DISCONNECT ?
                 R.string.disconnected :
                 R.string.can_not_connect);
-        Message message = Message.obtain();
-        message.arg1 = is_connected;
-        try {
-            messageHandler.send(message);
-        } catch (RemoteException e) {
-            Log.e(TAG, "Can't send from service to client", e);
-        }
+        SendMessage(signal);
     }
 
     private void disconnect() {
@@ -225,9 +239,8 @@ public class CustomVpnService /* renamed from 'VpnService' */ extends android.ne
     }
 
     public void Reconnect() {
-        if(interrupt_reconnect) {
+        if(interrupt) {
             reconnect_count = max_rec_count;
-            interrupt_reconnect = false;
             return;
         }
         if(reconnect_count < max_rec_count) {
@@ -247,7 +260,7 @@ public class CustomVpnService /* renamed from 'VpnService' */ extends android.ne
             } catch (IOException e) {
                 e.printStackTrace();
             }
-            SetDisconnectMessage(3);
+            SetDisconnectMessage(SIGNAL_FAIL_CONNECT);
 
         }
     }
