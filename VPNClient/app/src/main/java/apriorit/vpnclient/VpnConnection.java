@@ -1,9 +1,5 @@
 package apriorit.vpnclient;
 
-/**
- * Created by ivan on 01.10.2017.
- */
-
 import static java.nio.charset.StandardCharsets.US_ASCII;
 
 import android.app.PendingIntent;
@@ -90,6 +86,8 @@ public class VpnConnection implements Runnable {
      */
     private boolean connectedToServer = false;
 
+    private boolean send_vpn_close = false;
+
     /** WakeLock object to prevent client from falling asleep when VPN is enabled */
     private PowerManager.WakeLock wakeLock = null;
 
@@ -130,7 +128,6 @@ public class VpnConnection implements Runnable {
         } catch (IOException e) {
             e.printStackTrace();
         }
-
 
         mService = service;
         mConnectionId = connectionId;
@@ -242,12 +239,13 @@ public class VpnConnection implements Runnable {
                 bb.position(0);
                 dgramSock.send(dpacket);
                 bb.clear();
-                Thread.sleep(100);
+                Thread.sleep(200);
             }
 
             /* call wolfSSL_connect */
+
             status = ssl.connect();
-            Log.i("IO_CALLBACKS_DTLS", "Registered I/O callbacks end");
+
             if (status != WolfSSL.SSL_SUCCESS) {
                 int err = ssl.getError(status);
                 String errString = sslLib.getErrorString(err);
@@ -258,7 +256,6 @@ public class VpnConnection implements Runnable {
             showPeer(ssl);
 
             connectedToServer = true;
-
 
             iface = handshake(ssl);
             mService.SetDefaultRecCount();
@@ -320,12 +317,15 @@ public class VpnConnection implements Runnable {
                 Thread.sleep(IDLE_INTERVAL_MS);
             }
         } catch (PortUnreachableException e) {
+            send_vpn_close = true;
             e.printStackTrace();
             Log.e(getTag(), "Lost connection with server");
 
         } catch (SocketException e) {
+            send_vpn_close = true;
             Log.e(getTag(), "Cannot use socket", e);
         } catch (InterruptedException e) {
+            send_vpn_close = true;
             ByteBuffer packet = ByteBuffer.allocate(1024);
             for(int i = 0; i < 4; ++i) {
                 packet.clear();
@@ -351,7 +351,9 @@ public class VpnConnection implements Runnable {
             }
 
         } finally {
-
+            mService.SendCanBeClosed();
+            if(send_vpn_close)
+                mService.SetDisconnect(CustomVpnService.SIGNAL_SERVICE_STOP);
             connectedToServer = false;
 
             // free wakeLock to prevent battery draining:

@@ -25,4 +25,6 @@
     <string name="connected">VPN is connected!</string>
     <string name="disconnected">VPN is disconnected!</string>
     <string name="can_not_connect">VPN can not connect!</string>
+    <string name="wait">Please wait a bit...</string>
+    wait
 </resources>
