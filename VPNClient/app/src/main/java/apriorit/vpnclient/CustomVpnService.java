@@ -29,6 +29,7 @@ public class CustomVpnService /* renamed from 'VpnService' */ extends android.ne
     public static final int SIGNAL_SUCCESS_CONNECT = 3;
     public static final int SIGNAL_FAIL_CONNECT = 4;
     public static final int SIGNAL_SERVICE_STOP = 5;
+    public static final int SIGNAL_VPN_FAIL = 6;
     public static final  int max_rec_count = 10;
     private static final String TAG = CustomVpnService.class.getSimpleName();
     private Handler mHandler = null;
@@ -69,6 +70,8 @@ public class CustomVpnService /* renamed from 'VpnService' */ extends android.ne
     public boolean onUnbind(Intent intent) {
         if(!already_unbind) {
             already_show_connect = false;
+            if (intent.getAction() != null && intent.getAction().equals("android.net.VpnService"))
+                SetDisconnect(SIGNAL_SERVICE_STOP);
             SendMessage(UNBIND_SIGNAL);
             already_unbind = true;
         }
@@ -78,7 +81,6 @@ public class CustomVpnService /* renamed from 'VpnService' */ extends android.ne
     public void SetDisconnect(int signal) {
         if(interrupt)
             return;
-
         interrupt = true;
         SetDisconnectMessage(signal);
         disconnect();
@@ -213,9 +215,10 @@ public class CustomVpnService /* renamed from 'VpnService' */ extends android.ne
     }
 
     private void SetDisconnectMessage(int signal) {
-        mHandler.sendEmptyMessage(signal == SIGNAL_SUCCESS_DISCONNECT ?
-                R.string.disconnected :
-                R.string.can_not_connect);
+        mHandler.sendEmptyMessage(signal == SIGNAL_SUCCESS_DISCONNECT ||
+                                        signal == SIGNAL_SERVICE_STOP ?
+                                    R.string.disconnected :
+                                    R.string.can_not_connect);
         SendMessage(signal);
     }
 

@@ -80,7 +80,6 @@ public class VpnConnection implements Runnable {
 
     private PendingIntent mConfigureIntent;
     private OnEstablishListener mOnEstablishListener;
-
     /**
      * This boolean controls recv-thread execution. If false, thread will be terminated.
      */
@@ -353,7 +352,7 @@ public class VpnConnection implements Runnable {
         } finally {
             mService.SendCanBeClosed();
             if(send_vpn_close)
-                mService.SetDisconnect(CustomVpnService.SIGNAL_SERVICE_STOP);
+                mService.SetDisconnect(CustomVpnService.SIGNAL_VPN_FAIL);
             connectedToServer = false;
 
             // free wakeLock to prevent battery draining:

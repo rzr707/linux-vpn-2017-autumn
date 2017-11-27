@@ -66,11 +66,15 @@ public class VpnClient extends Activity{
                     service_start = false;
                     vpn_active = false;
                     break;
+                case CustomVpnService.SIGNAL_VPN_FAIL:
                 case CustomVpnService.SIGNAL_SERVICE_STOP:
+                    startLockAnimation(vpn_active ? DISCONNECT_SUCCESS: CONNECT_FALSE, buttonImageView);
                     service_start = false;
-                    vpn_active = false; //break mustn't be written
-                    button_state = !button_state;
+                    vpn_active = false;
+                    button_state = false;
                     unbindService(mConnection);
+                    serverSpinner.setEnabled(true);
+                    break;
                 case CustomVpnService.SIGNAL_SUCCESS_DISCONNECT:
                 case CustomVpnService.SIGNAL_FAIL_CONNECT:
                     startLockAnimation(vpn_active ? DISCONNECT_SUCCESS: CONNECT_FALSE, buttonImageView);
@@ -139,13 +143,13 @@ public class VpnClient extends Activity{
                             onActivityResult(0, RESULT_OK, null);
                         }
                         startLockAnimation(TRY_CONNECT, buttonImageView);
-                        button_state = !button_state;
+                        button_state = true;
                 } else if(service_start == true && service_start == button_state){
                             mService.SetDisconnect(vpn_active ?
                                     CustomVpnService.SIGNAL_SUCCESS_DISCONNECT
                                     : CustomVpnService.SIGNAL_FAIL_CONNECT);
                             unbindService(mConnection);
-                            button_state = !button_state;
+                            button_state = false;
                 } else if(mService !=null)
                     mService.SendWaitMessage();
 
