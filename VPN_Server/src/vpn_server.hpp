@@ -167,7 +167,6 @@ public:
             return;
         }
 
-        //TunnelManager::log("Working with tunnel [" + tunStr + "] now..");
         tunMgr->createUnixTunnel(serverIpStr,
                                  clientIpStr,
                                  tunStr);
@@ -175,7 +174,6 @@ public:
         interface = get_interface(tunStr.c_str());
 
         mutex.unlock();
-
 
         // fill array with parameters to send:
         std::unique_ptr<ClientParameters> cliParams(buildParameters(clientIpStr));
@@ -216,9 +214,7 @@ public:
                         TunnelManager::log("sentData < 0");
                         e = wolfSSL_get_error(tunnel.second, 0);
                         printf("error = %d, %s\n", e, wolfSSL_ERR_reason_error_string(e));
-                    } /*else {
-                        // TunnelManager::log("outgoing packet from interface to the tunnel.");
-                    }*/
+                    }
 
                     // there might be more outgoing packets.
                     idle = false;
@@ -245,10 +241,7 @@ public:
                         sentData = write(interface, packet, length);
                         if(sentData < 0) {
                             TunnelManager::log("write(interface, packet, length) < 0");
-                        } else {
-                            // TunnelManager::log("written the incoming packet to the output stream..");
                         }
-
                     } else {
                         TunnelManager::log("Recieved empty control msg from client");
                         if(packet[1] == CLIENT_WANT_DISCONNECT && length == 2) {
@@ -306,18 +299,15 @@ public:
             TunnelManager::log("Client has been disconnected from tunnel [" +
                                tempTunStr + "]");
 
-            //close(tunnel.first);
-            // wolfSSL_set_fd(tunnel.second, 0);
-            wolfSSL_shutdown(tunnel.second);
-            wolfSSL_free(tunnel.second);
-            //
-            manager->returnAddrToPool(serTunAddr);
-            manager->returnAddrToPool(cliTunAddr);
-            tunMgr->closeTunNumber(tunNumber);
-            return;
+            break;
         }
-        TunnelManager::log("Cannot create tunnels", std::cerr);
-        throw std::runtime_error("Cannot create tunnels");
+        TunnelManager::log("Tunnel closed.");
+        wolfSSL_shutdown(tunnel.second);
+        wolfSSL_free(tunnel.second);
+        //
+        manager->returnAddrToPool(serTunAddr);
+        manager->returnAddrToPool(cliTunAddr);
+        tunMgr->closeTunNumber(tunNumber);
     }
     
     /**
@@ -523,7 +513,7 @@ public:
         // put the tunnel into non-blocking mode.
         fcntl(tunnel, F_SETFL, O_NONBLOCK);
 
-        /* set the session ssl to client connection port */
+        // set the session ssl to client connection port
         wolfSSL_set_fd(ssl, tunnel);
         wolfSSL_set_using_nonblock(ssl, 1);
 
@@ -539,7 +529,7 @@ public:
 
         if(tryCounter >= 50) {
             wolfSSL_free(ssl);
-            return get_tunnel(port);
+            return std::pair<int, WOLFSSL*>(-1, nullptr);
         }
 
         return std::pair<int, WOLFSSL*>(tunnel, ssl);
