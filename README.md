@@ -41,9 +41,7 @@ If you need to reconfigure server run parameters, edit file "/etc/systemd/system
 3. Compile server:
   
    * $ cd VPN_Server/
-   * $ make
-   * or:
-   * $ g++ -std=c++11 main.cpp -lwolfssl -o ../VPN_Server
+   * $ g++ main.cpp vpn_server.cpp ip_manager.cpp tunnel_mgr.cpp -std=c++11 -lwolfssl -o ../VPN_Server
 
 4. (Optional) You can generate your own certificates and keys. Use openssl for this. When generated, put your new files to VPN_Server/certs/ directory, replacing the old ones. Also you need replace ca_cert.pem in client application the path is VPNClient/app/src/main/assets/
 
