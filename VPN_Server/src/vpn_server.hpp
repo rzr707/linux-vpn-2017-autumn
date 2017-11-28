@@ -59,7 +59,7 @@ public:
         CLIENT_WANT_DISCONNECT = 2
     };
 
-    explicit VPNServer (int argc, char** argv);
+    explicit VPNServer(int argc, char** argv);
     ~VPNServer();
 
     void initServer();

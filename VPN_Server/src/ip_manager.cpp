@@ -5,7 +5,7 @@
  * @param ipAndMask - contains ip address and mask bits
  *  like "x.x.x.x/y" where y is bit count (from 0 to 32)
  */
-IPManager::IPManager(std::__cxx11::string ipAndMask, size_t poolInitSize) {
+IPManager::IPManager(std::string ipAndMask, size_t poolInitSize) {
     size_t slashPos = ipAndMask.find('/');
 
     if(slashPos == std::string::npos ||
