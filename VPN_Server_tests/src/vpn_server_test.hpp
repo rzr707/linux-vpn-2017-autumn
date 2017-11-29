@@ -2,6 +2,7 @@
 #define VPN_SERVER_TEST_HPP
 
 #include <gtest/gtest.h>
+#include <../VPN_Server/src/tunnel_mgr.cpp>
 #include <../VPN_Server/src/vpn_server.cpp>
 
 TEST(VpnServerCorrectSubmask, CorrectSubmask) {

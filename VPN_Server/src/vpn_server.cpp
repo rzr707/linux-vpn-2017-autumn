@@ -59,7 +59,7 @@ VPNServer::~VPNServer() {
  */
 void VPNServer::initServer() {
     mutex.lock();
-        std::cout << "\033[4;32mVPN Service is started (DTLS, ver.23.11.17)\033[0m"
+        std::cout << "\033[4;32mVPN Service is started (DTLS, ver.29.11.17)\033[0m"
                   << std::endl;
     mutex.unlock();
 
@@ -388,7 +388,7 @@ bool VPNServer::correctIp(const std::string& ipAddr) {
  * @return true if interface 'iface' exists
  */
 bool VPNServer::isNetIfaceExists(const std::string& iface) {
-    struct ifaddrs *addrs, *tmp;
+    ifaddrs *addrs, *tmp;
 
     getifaddrs(&addrs);
     tmp = addrs;

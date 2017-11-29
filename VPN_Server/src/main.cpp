@@ -43,8 +43,12 @@ int main(int argc, char **argv) {
         return EXIT_FAILURE;
     }
 
-    VPNServer server(argc, argv);
-    server.initServer();
+    try {
+        VPNServer server(argc, argv);
+        server.initServer();
+    } catch (const std::exception& e) {
+        std::cerr << e.what() << std::endl;
+    }
 
     return EXIT_SUCCESS;
 }
