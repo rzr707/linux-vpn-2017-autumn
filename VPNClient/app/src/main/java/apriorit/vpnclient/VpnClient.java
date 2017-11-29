@@ -22,6 +22,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
+import android.widget.CheckBox;
 import android.widget.ImageView;
 import android.widget.Spinner;
 import android.widget.TextView;
@@ -33,9 +34,13 @@ public class VpnClient extends Activity{
     public static final int DISCONNECT_SUCCESS = 2;
     public static final int CONNECT_FALSE = 3;
     public static final String EXTRA_MESSAGE = "apriorit.vpnclient.VpnClient.StartUp";
+    public static final String BOOT_ON = "on";
+    public static final String BOOT_OFF = "off";
+    public static final String BOOT_REAL_MESSAGE = "START_BOOT";
     private CustomVpnService mService;
     private ImageView buttonImageView;
     private Spinner   serverSpinner;
+    private CheckBox  bootCheckBox;
     private boolean vpn_active = false;
     private boolean button_state = false;
     private boolean service_start = false;
@@ -102,6 +107,7 @@ public class VpnClient extends Activity{
 
         serverSpinner   = (Spinner) findViewById(R.id.serverSpinner);
         buttonImageView = (ImageView) findViewById(R.id.buttonImageView);
+        bootCheckBox = (CheckBox)findViewById(R.id.bootCheckBox);
 
         serverSpinner.setAdapter(new ServerSpinnerAdapter(VpnClient.this,
                 R.layout.custom_spinner_object,
@@ -110,6 +116,7 @@ public class VpnClient extends Activity{
         // Load preferences, such like chosen server and button state:
         final SharedPreferences prefs = getSharedPreferences(Prefs.NAME, MODE_PRIVATE);
         serverSpinner.setSelection(prefs.getInt(Prefs.SPINNER_POSITION, 0));
+        bootCheckBox.setChecked(prefs.getString(Prefs.BOOTS, "").equals(BOOT_ON));
 
         if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             AnimatedVectorDrawable drawable =
@@ -160,14 +167,23 @@ public class VpnClient extends Activity{
             }
         });
 
+        bootCheckBox.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                prefs.edit()
+                        .putString(Prefs.BOOTS, bootCheckBox.isChecked() ? BOOT_ON : BOOT_OFF)
+                        .apply();
+            }
+        });
+
         if(!auto_runned)
         {
             Intent intent_super = getIntent();
             if (intent_super != null) {
                 String message = intent_super.getStringExtra(EXTRA_MESSAGE);
-                if (message != null && message.equals("START_BOOT")) {
+                if (message != null && message.equals(BOOT_REAL_MESSAGE)) {
                     buttonImageView.callOnClick();
-                    moveTaskToBack(true);
+                    onBackPressed();
                 }
             }
             auto_runned = true;
