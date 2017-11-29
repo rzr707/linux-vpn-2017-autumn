@@ -11,4 +11,5 @@ LIBS += -L/usr/local/lib -lgtest \
 
 HEADERS += \
     src/tunnel_mgr_test.hpp \
-    src/ip_manager_test.hpp
+    src/ip_manager_test.hpp \
+    src/vpn_server_test.hpp

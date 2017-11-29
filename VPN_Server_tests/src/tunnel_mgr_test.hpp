@@ -1,7 +1,7 @@
 #ifndef TUNNEL_MGR_TEST_HPP
 #define TUNNEL_MGR_TEST_HPP
 
-#include "../../VPN_Server/src/vpn_server.hpp"
+#include "../../VPN_Server/src/tunnel_mgr.cpp"
 #include <gtest/gtest.h>
 #include <math.h>
 

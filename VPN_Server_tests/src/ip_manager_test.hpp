@@ -1,7 +1,7 @@
 #ifndef IP_MANAGER_TEST_HPP
 #define IP_MANAGER_TEST_HPP
 
-#include "../../VPN_Server/src/ip_manager.hpp"
+#include "../../VPN_Server/src/ip_manager.cpp"
 #include <gtest/gtest.h>
 
 class IPManagerTest : public testing::Test {
