@@ -32,12 +32,14 @@ public class VpnClient extends Activity{
     public static final int CONNECT_SUCCESS = 1;
     public static final int DISCONNECT_SUCCESS = 2;
     public static final int CONNECT_FALSE = 3;
+    public static final String EXTRA_MESSAGE = "apriorit.vpnclient.VpnClient.StartUp";
     private CustomVpnService mService;
     private ImageView buttonImageView;
     private Spinner   serverSpinner;
     private boolean vpn_active = false;
     private boolean button_state = false;
     private boolean service_start = false;
+    private boolean auto_runned = false;
 
     private final Countries countries = new Countries(new CountryObject[] {
             new CountryObject(R.drawable.ic_flag_of_france, "France",
@@ -52,6 +54,7 @@ public class VpnClient extends Activity{
         String SERVER_PORT = "server.port";
         String SPINNER_POSITION = "spinner.position";
         String BUTTON_STATE = "button.state";
+        String BOOTS = "BOOT_ON_START_VPN";
     }
 
     public class MessageHandler extends Handler {
@@ -156,6 +159,19 @@ public class VpnClient extends Activity{
                 serverSpinner.setEnabled(!button_state);
             }
         });
+
+        if(!auto_runned)
+        {
+            Intent intent_super = getIntent();
+            if (intent_super != null) {
+                String message = intent_super.getStringExtra(EXTRA_MESSAGE);
+                if (message != null && message.equals("START_BOOT")) {
+                    buttonImageView.callOnClick();
+                    moveTaskToBack(true);
+                }
+            }
+            auto_runned = true;
+        }
     }
 
     @Override
