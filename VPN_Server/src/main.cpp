@@ -39,8 +39,7 @@ int main(int argc, char **argv) {
         "* [7, 8]   -d 8.8.8.8  - DNS-server address      (optional, default = 8.8.8.8)\n"
         "* [9, 10]  -r 0.0.0.0  - routing address         (optional, default = 0.0.0.0)\n"
         "* [11]     0           - routing address mask    (optional, default = 0)\n"
-        "* [12, 13] -i wlan0    - physical network interface (opt., default = eth0)\n*\n"
-        "* Enter 'exitvpn' in terminal to close the server.\n";
+        "* [12, 13] -i wlan0    - physical network interface (opt., default = eth0)\n*\n";
         return EXIT_FAILURE;
     }
 

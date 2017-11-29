@@ -66,6 +66,9 @@ public:
     void createNewConnection();
     void SetDefaultSettings(std::string *&in_param, const size_t& type);
     void parseArguments(int argc, char** argv);
+    bool correctSubmask(const std::string& submaskString);
+    bool correctIp(const std::string& ipAddr);
+    bool isNetIfaceExists(const std::string& iface);
     ClientParameters* buildParameters(const std::string& clientIp);
     int get_interface(const char *name);
     std::pair<int, WOLFSSL*> get_tunnel(const char *port);

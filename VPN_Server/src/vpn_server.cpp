@@ -293,33 +293,65 @@ void VPNServer::parseArguments(int argc, char** argv) {
     port = argv[1]; // port to listen
 
     if(atoi(port.c_str()) < 1 || atoi(port.c_str()) > 0xFFFF) {
-        TunnelManager::log("Error: invalid number of port (" +
-                           port +
-                           "). Terminating . . .",
-                           std::cerr);
         throw std::invalid_argument(
                     "Error: invalid number of port " + port);
     }
 
     for(int i = 2; i < argc; ++i) {
-        switch (argv[i][1]) {
-            case 'm':
-                cliParams.mtu = argv[i + 1];
-                break;
-            case 'a':
-                cliParams.virtualNetworkIp = argv[i + 1];
-                cliParams.networkMask = argv[i + 2];
-                break;
-            case 'd':
-                cliParams.dnsIp = argv[i + 1];
-                break;
-            case 'r':
-                cliParams.routeIp = argv[i + 1];
-                cliParams.routeMask = argv[i + 2];
-                break;
-            case 'i':
-                cliParams.physInterface = argv[i + 1];
-                break;
+        if(strlen(argv[i]) == 2) {
+            switch (argv[i][1]) {
+                case 'm':
+                    if((i + 1) < argc) {
+                        cliParams.mtu = argv[i + 1];
+                    }
+                    if(atoi(cliParams.mtu.c_str()) > 2000
+                       || atoi(cliParams.mtu.c_str()) < 1000) {
+                        throw std::invalid_argument("Invalid mtu");
+                    }
+                    break;
+                case 'a':
+                    if((i + 1) < argc) {
+                            cliParams.virtualNetworkIp = argv[i + 1];
+                            if(!correctIp(cliParams.virtualNetworkIp)) {
+                                throw std::invalid_argument("Invalid network ip");
+                            }
+                    }
+                    if((i + 2) < argc) {
+                        cliParams.networkMask = argv[i + 2];
+                        if(!correctSubmask(cliParams.networkMask)) {
+                           throw std::invalid_argument("Invalid mask");
+                        }
+                    }
+                    break;
+                case 'd':
+                    if((i + 1) < argc) {
+                        cliParams.dnsIp = argv[i + 1];
+                    }
+                    if(!correctIp(cliParams.dnsIp)) {
+                        throw std::invalid_argument("Invalid dns IP");
+                    }
+                    break;
+                case 'r':
+                    if((i + 1) < argc) {
+                        cliParams.routeIp = argv[i + 1];
+                    }
+                    if(!correctIp(cliParams.routeIp)) {
+                        throw std::invalid_argument("Invalid route IP");
+                    }
+                    if((i + 2) < argc) {
+                        cliParams.routeMask = argv[i + 2];
+                        if(!correctSubmask(cliParams.routeMask)) {
+                            throw std::invalid_argument("Invalid route mask");
+                        }
+                    }
+                    break;
+                case 'i':
+                    cliParams.physInterface = argv[i + 1];
+                    if(!isNetIfaceExists(cliParams.physInterface)) {
+                        throw std::invalid_argument("No such network interface");
+                    }
+                    break;
+            }
         }
     }
 
@@ -328,6 +360,50 @@ void VPNServer::parseArguments(int argc, char** argv) {
      */
     for(size_t i = 0; i < default_values; ++i)
         SetDefaultSettings(std_params[i], i);
+}
+
+/**
+ * @brief VPNServer::correctSubmask checks netmask correctness
+ * @param submaskString
+ * @return true if submask is correct
+ */
+bool VPNServer::correctSubmask(const std::string& submaskString) {
+    int submask = std::atoi(submaskString.c_str());
+    return (submask >= 0) && (submask <= 32);
+}
+
+/**
+ * @brief VPNServer::correctIp checks IPv4 address correctness
+ * @param ipAddr
+ * @return true if IPv4 address is correct
+ */
+bool VPNServer::correctIp(const std::string& ipAddr) {
+    in_addr stub;
+    return inet_pton(AF_INET, ipAddr.c_str(), &stub) == 1;
+}
+
+/**
+ * @brief VPNServer::isNetIfaceExists checks existance of network interface
+ * @param iface - system network interface name, e.g. 'eth0'
+ * @return true if interface 'iface' exists
+ */
+bool VPNServer::isNetIfaceExists(const std::string& iface) {
+    struct ifaddrs *addrs, *tmp;
+
+    getifaddrs(&addrs);
+    tmp = addrs;
+
+    while (tmp) {
+        if (tmp->ifa_addr && tmp->ifa_addr->sa_family == AF_PACKET)
+            if(strcmp(iface.c_str(), tmp->ifa_name) == 0)
+                return true;
+
+        tmp = tmp->ifa_next;
+    }
+
+    freeifaddrs(addrs);
+
+    return false;
 }
 
 /**
@@ -367,9 +443,6 @@ int VPNServer::get_interface(const char *name) {
     strncpy(ifr.ifr_name, name, sizeof(ifr.ifr_name));
 
     if (int status = ioctl(interface, TUNSETIFF, &ifr)) {
-        TunnelManager::log("Cannot get TUN interface\nStatus is: " +
-                           status,
-                           std::cerr);
         throw std::runtime_error("Cannot get TUN interface\nStatus is: " +
                                  status);
     }
