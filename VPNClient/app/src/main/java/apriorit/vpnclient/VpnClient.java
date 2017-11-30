@@ -19,14 +19,20 @@ import android.os.Message;
 import android.os.Messenger;
 import android.util.Log;
 import android.view.LayoutInflater;
+import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
-import android.widget.CheckBox;
+import android.widget.ImageButton;
 import android.widget.ImageView;
+import android.widget.PopupMenu;
 import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 public class VpnClient extends Activity{
     public static final int TRY_CONNECT = 0;
@@ -40,7 +46,11 @@ public class VpnClient extends Activity{
     private CustomVpnService mService;
     private ImageView buttonImageView;
     private Spinner   serverSpinner;
-    private CheckBox  bootCheckBox;
+    private SharedPreferences prefs;
+    private ImageButton button_menu;
+    private ArrayList<String> country_list;
+
+    private ArrayAdapter<String> serverSpinnerAdapter;
     private boolean vpn_active = false;
     private boolean button_state = false;
     private boolean service_start = false;
@@ -107,16 +117,20 @@ public class VpnClient extends Activity{
 
         serverSpinner   = (Spinner) findViewById(R.id.serverSpinner);
         buttonImageView = (ImageView) findViewById(R.id.buttonImageView);
-        bootCheckBox = (CheckBox)findViewById(R.id.bootCheckBox);
 
-        serverSpinner.setAdapter(new ServerSpinnerAdapter(VpnClient.this,
+        country_list = new ArrayList<>(Arrays.asList(countries.getCountriesNames()));
+
+        serverSpinnerAdapter = new ServerSpinnerAdapter<>(VpnClient.this,
                 R.layout.custom_spinner_object,
-                countries.getCountriesNames()));
+                country_list);
+
+        serverSpinner.setAdapter(serverSpinnerAdapter);
 
         // Load preferences, such like chosen server and button state:
-        final SharedPreferences prefs = getSharedPreferences(Prefs.NAME, MODE_PRIVATE);
+        prefs = getSharedPreferences(Prefs.NAME, MODE_PRIVATE);
         serverSpinner.setSelection(prefs.getInt(Prefs.SPINNER_POSITION, 0));
-        bootCheckBox.setChecked(prefs.getString(Prefs.BOOTS, "").equals(BOOT_ON));
+        button_menu = (ImageButton) findViewById(R.id.buttonMenu);
+        button_menu.setOnClickListener(buttonMenuClickListener);
 
         if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             AnimatedVectorDrawable drawable =
@@ -167,15 +181,6 @@ public class VpnClient extends Activity{
             }
         });
 
-        bootCheckBox.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                prefs.edit()
-                        .putString(Prefs.BOOTS, bootCheckBox.isChecked() ? BOOT_ON : BOOT_OFF)
-                        .apply();
-            }
-        });
-
         if(!auto_runned)
         {
             Intent intent_super = getIntent();
@@ -188,6 +193,43 @@ public class VpnClient extends Activity{
             }
             auto_runned = true;
         }
+    }
+
+    View.OnClickListener buttonMenuClickListener = new View.OnClickListener() {
+        @Override
+        public void onClick(View v) {
+            showPopupMenu(v);
+        }
+    };
+
+    private void showPopupMenu(View v) {
+        PopupMenu popupMenu = new PopupMenu(this, v);
+        popupMenu.inflate(R.menu.popupmenu);
+        popupMenu.getMenu().getItem(0).setChecked(prefs.getString(Prefs.BOOTS, "").equals(BOOT_ON));
+
+        popupMenu
+                .setOnMenuItemClickListener(new PopupMenu.OnMenuItemClickListener() {
+
+                    @Override
+                    public boolean onMenuItemClick(MenuItem item) {
+                        switch (item.getItemId()) {
+                            case R.id.menu1:
+                                item.setChecked(!item.isChecked());
+                                prefs.edit()
+                                        .putString(Prefs.BOOTS, item.isChecked() ? BOOT_ON : BOOT_OFF)
+                                        .apply();
+                                Toast.makeText(getApplicationContext(),
+                                        "Boot on turn on is " + (item.isChecked() ?
+                                                "enabled" :
+                                                "disabled"),
+                                        Toast.LENGTH_SHORT).show();
+                                return true;
+                            default:
+                                return false;
+                        }
+                    }
+                });
+        popupMenu.show();
     }
 
     @Override
@@ -265,8 +307,8 @@ public class VpnClient extends Activity{
                 || mgr.getNetworkInfo(ConnectivityManager.TYPE_WIFI).getState() == NetworkInfo.State.CONNECTED);
     }
 
-    public class ServerSpinnerAdapter extends ArrayAdapter {
-        public ServerSpinnerAdapter(Context context, int textViewResourceId, String[] objects) {
+    public class ServerSpinnerAdapter<T> extends ArrayAdapter<T> {
+        public ServerSpinnerAdapter(Context context, int textViewResourceId, List<T> objects) {
             super(context, textViewResourceId, objects);
         }
 

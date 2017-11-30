@@ -25,20 +25,21 @@
             android:orientation="horizontal">
 
             <Space
-                android:layout_width="50dp"
+                android:layout_width="1dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1" />
 
-            <CheckBox
-                android:id="@+id/bootCheckBox"
-                android:layout_width="158dp"
-                android:layout_height="wrap_content"
-                android:text="Boot on turned on" />
+            <ImageButton
+                android:id="@+id/buttonMenu"
+                android:layout_width="59dp"
+                android:layout_height="72dp"
+                android:background="@null"
+                android:src="@mipmap/popupbutton" />
         </LinearLayout>
 
         <Space
             android:layout_width="match_parent"
-            android:layout_height="100dp" />
+            android:layout_height="70dp" />
 
         <LinearLayout
             android:layout_width="match_parent"

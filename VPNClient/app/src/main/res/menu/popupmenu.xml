@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android" >
+        <item
+            android:id="@+id/menu1"
+            android:checked="true"
+            android:title="Boot at turning on" />
+        <item
+            android:id="@+id/menu2"
+            android:title="Add custom server" />
+</menu>
