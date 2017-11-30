@@ -210,7 +210,7 @@ public class VpnClient extends Activity{
                 String message = intent_super.getStringExtra(EXTRA_MESSAGE);
                 if (message != null && message.equals(BOOT_REAL_MESSAGE)) {
                     buttonImageView.callOnClick();
-                    onBackPressed();
+                    //onBackPressed();
                 }
             }
             auto_runned = true;
