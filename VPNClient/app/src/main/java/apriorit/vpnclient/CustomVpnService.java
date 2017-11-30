@@ -166,13 +166,7 @@ public class CustomVpnService /* renamed from 'VpnService' */ extends android.ne
         // Extract information from the shared preferences.
         final SharedPreferences prefs = getSharedPreferences(VpnClient.Prefs.NAME, MODE_PRIVATE);
         final String server = prefs.getString(VpnClient.Prefs.SERVER_ADDRESS, "");
-        final int port;
-        try {
-            port = Integer.parseInt(prefs.getString(VpnClient.Prefs.SERVER_PORT, ""));
-        } catch (NumberFormatException e) {
-            Log.e(TAG, "Bad port: " + prefs.getString(VpnClient.Prefs.SERVER_PORT, null), e);
-            return;
-        }
+        final int port = Integer.parseInt(prefs.getString(VpnClient.Prefs.SERVER_PORT, ""));
 
         // Kick off a connection.
         startConnection(new apriorit.vpnclient.VpnConnection(
@@ -263,8 +257,7 @@ public class CustomVpnService /* renamed from 'VpnService' */ extends android.ne
             } catch (IOException e) {
                 e.printStackTrace();
             }
-            SetDisconnectMessage(SIGNAL_FAIL_CONNECT);
-
+            SetDisconnectMessage(SIGNAL_VPN_FAIL);
         }
     }
 }

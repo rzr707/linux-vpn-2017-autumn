@@ -40,6 +40,7 @@ public class VpnClient extends Activity{
     public static final int DISCONNECT_SUCCESS = 2;
     public static final int CONNECT_FALSE = 3;
     public static final String EXTRA_MESSAGE = "apriorit.vpnclient.VpnClient.StartUp";
+    public static final String OPEN_MESSAGE = "apriorit.vpnclient.VpnClient.AddCustomServer";
     public static final String BOOT_ON = "on";
     public static final String BOOT_OFF = "off";
     public static final String BOOT_REAL_MESSAGE = "START_BOOT";
@@ -55,6 +56,7 @@ public class VpnClient extends Activity{
     private boolean button_state = false;
     private boolean service_start = false;
     private boolean auto_runned = false;
+    private int list_count = 0;
 
     private final Countries countries = new Countries(new CountryObject[] {
             new CountryObject(R.drawable.ic_flag_of_france, "France",
@@ -96,6 +98,10 @@ public class VpnClient extends Activity{
                 case CustomVpnService.SIGNAL_SUCCESS_DISCONNECT:
                 case CustomVpnService.SIGNAL_FAIL_CONNECT:
                     startLockAnimation(vpn_active ? DISCONNECT_SUCCESS: CONNECT_FALSE, buttonImageView);
+                    serverSpinner.setEnabled(true);
+                    service_start = false;
+                    vpn_active = false;
+                    button_state = false;
                     break;
                 case CustomVpnService.SIGNAL_SUCCESS_CONNECT:
                     startLockAnimation(CONNECT_SUCCESS, buttonImageView);
@@ -126,9 +132,11 @@ public class VpnClient extends Activity{
 
         serverSpinner.setAdapter(serverSpinnerAdapter);
 
+        list_count = countries.GetCount();
         // Load preferences, such like chosen server and button state:
         prefs = getSharedPreferences(Prefs.NAME, MODE_PRIVATE);
-        serverSpinner.setSelection(prefs.getInt(Prefs.SPINNER_POSITION, 0));
+        serverSpinner.setSelection(prefs.getInt(Prefs.SPINNER_POSITION, 0) >= list_count ? 0 :
+                                                     prefs.getInt(Prefs.SPINNER_POSITION, 0));
         button_menu = (ImageButton) findViewById(R.id.buttonMenu);
         button_menu.setOnClickListener(buttonMenuClickListener);
 
@@ -139,6 +147,7 @@ public class VpnClient extends Activity{
             drawable.start();
             buttonImageView.refreshDrawableState();
         }
+
 
         Log.i("ABSOLUTE_PATH", getApplicationContext().getFilesDir().getAbsolutePath());
 
@@ -152,12 +161,25 @@ public class VpnClient extends Activity{
                                     Toast.LENGTH_LONG).show();
                             return;
                         }
+
                         prefs.edit()
                                 .putString(Prefs.SERVER_ADDRESS, countries.getIpAddresses()[serverSpinner.getSelectedItemPosition()])
                                 .putString(Prefs.SERVER_PORT, countries.getServerPorts()[serverSpinner.getSelectedItemPosition()])
                                 .putInt(Prefs.SPINNER_POSITION, serverSpinner.getSelectedItemPosition())
                                 .putBoolean(Prefs.BUTTON_STATE, !service_start)
                                 .commit();
+
+                    final int port_client;
+                    try {
+                        port_client = Integer.parseInt(prefs.getString(VpnClient.Prefs.SERVER_PORT, ""));
+                    } catch (NumberFormatException e) {
+                        Log.e("Bad port: " + prefs.getString(VpnClient.Prefs.SERVER_PORT, null),"client");
+                        Toast.makeText(getApplicationContext(),
+                                "Bad port",
+                                Toast.LENGTH_LONG).show();
+                        return;
+                    }
+
 
                         Intent intent = android.net.VpnService.prepare(VpnClient.this);
                         if (intent != null) {
@@ -224,6 +246,10 @@ public class VpnClient extends Activity{
                                                 "disabled"),
                                         Toast.LENGTH_SHORT).show();
                                 return true;
+                            case R.id.menu2:
+                                Intent intent = new Intent(getBaseContext(), AddCustomServer.class);
+                                startActivityForResult(intent,1);
+                                return true;
                             default:
                                 return false;
                         }
@@ -239,8 +265,30 @@ public class VpnClient extends Activity{
 
     @Override
     protected void onActivityResult(int request, int result, Intent data) {
-        if (result == RESULT_OK) {
-            bindService(getServiceIntent().putExtra("ConStat", new Messenger(messageHandler)), mConnection, Context.BIND_AUTO_CREATE);
+        if (request==0) {
+            if(result == RESULT_OK) {
+                bindService(getServiceIntent().putExtra("ConStat", new Messenger(messageHandler)), mConnection, Context.BIND_AUTO_CREATE);
+            }
+            else
+            {
+                startLockAnimation(vpn_active ? DISCONNECT_SUCCESS: CONNECT_FALSE, buttonImageView);
+                serverSpinner.setEnabled(true);
+                service_start = false;
+                vpn_active = false;
+                button_state = false;
+            }
+        }
+        if (request == 1) {
+            if (result == RESULT_OK) {
+                if(list_count == countries.GetCount())
+                    country_list.add("");
+                Bundle bundle = data.getExtras();
+                countries.AddNewCountry(
+                        bundle.getString(AddCustomServer.Prefs.NEW_NAME),
+                        bundle.getString(AddCustomServer.Prefs.NEW_ADDRESS),
+                        bundle.getString(AddCustomServer.Prefs.NEW_PORT));
+                serverSpinnerAdapter.notifyDataSetChanged();
+            }
         }
     }
 
