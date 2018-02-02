@@ -69,7 +69,7 @@ public class VpnConnection implements Runnable {
     /**
      * Time between polling the VPN interface for new traffic
      */
-    private static final long IDLE_INTERVAL_MS = TimeUnit.MILLISECONDS.toMillis(4); // 20 by default
+    private static final long IDLE_INTERVAL_MS = TimeUnit.MILLISECONDS.toMillis(1); // 20 by default
     private static final int MAX_HANDSHAKE_ATTEMPTS = 50;
 
     private final CustomVpnService mService;
