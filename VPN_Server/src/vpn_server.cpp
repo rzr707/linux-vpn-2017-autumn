@@ -280,15 +280,14 @@ void VPNServer::SetDefaultSettings(std::string *&in_param, const size_t& type) {
  * @param argv - arguments vector
  */
 void VPNServer::parseArguments(int argc, char** argv) {
-    std::string* std_params[default_values] = {
-        &cliParams.mtu,
-        &cliParams.virtualNetworkIp,
-        &cliParams.networkMask,
-        &cliParams.dnsIp,
-        &cliParams.routeIp,
-        &cliParams.routeMask,
-        &cliParams.physInterface
-    };
+    std::string* std_params[default_values];
+    std_params[0] = &cliParams.mtu;
+    std_params[1] = &cliParams.virtualNetworkIp;
+    std_params[2] = &cliParams.networkMask;
+    std_params[3] = &cliParams.dnsIp;
+    std_params[4] = &cliParams.routeIp;
+    std_params[5] = &cliParams.routeMask;
+    std_params[6] = &cliParams.physInterface;
 
     port = argv[1]; // port to listen
 
