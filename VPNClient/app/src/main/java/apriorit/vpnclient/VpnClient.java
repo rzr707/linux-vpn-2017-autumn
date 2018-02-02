@@ -59,6 +59,10 @@ public class VpnClient extends Activity{
     private int list_count = 0;
 
     private final Countries countries = new Countries(new CountryObject[] {
+            /* Localhost test countryobject:
+            new CountryObject(R.drawable.ic_flag_of_ukraine, "Ukraine",
+                    "192.168.0.100", "8000"),
+            */
             new CountryObject(R.drawable.ic_flag_of_france, "France",
                     "5.135.153.169", "8000"),
             new CountryObject(R.drawable.ic_flag_of_the_united_states, "USA",

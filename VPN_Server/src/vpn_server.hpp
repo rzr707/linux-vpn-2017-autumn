@@ -73,6 +73,7 @@ public:
     int get_interface(const char *name);
     std::pair<int, WOLFSSL*> get_tunnel(const char *port);
     void initSsl();
+    void certError(const char* filename);
 
 };
 

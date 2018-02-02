@@ -67,7 +67,7 @@ Where:
 
 1. First of all you need to have NDK, CMake and LLDB installed in Android studio. To do that, go to "Tools->Android->SDK Manager", choose SDK Tools tab and install these tools.
 2. Go to wolfssl/wolfssl/ and make copy of options.h.in and rename it to options.h
-3. In Android studio: Build->Refresh Lincked C++ projects
+3. In Android studio: Build->Refresh Linked C++ projects
 4. In Android studio: Build->Clean Project
 5. In Android studio: Build->Rebuild Project
 6. Or use gradlew.bat or gradlew file to build project without Android Studio IDE (in VPNClient/ directory)
@@ -78,6 +78,6 @@ Where:
 
 1. Choose VPN server to connect from list;
 2. Tap lock button to connect to the vpn server or disconnect from it. 
-3. You will be informed about connection status via android notification and toasts.
+3. You will be informed about connection status via Android notifications and toasts.
 
 

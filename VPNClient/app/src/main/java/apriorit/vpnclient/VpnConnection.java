@@ -108,7 +108,7 @@ public class VpnConnection implements Runnable {
         /**
          * Load CA certificate from android assets:
          */
-        String text = "ca_cert.pem";
+        String cert = "ca_cert.crt";
         try {
             Log.i("ASSETS_LIST",
                     Arrays.toString(appContext.getAssets().list(""))
@@ -119,7 +119,7 @@ public class VpnConnection implements Runnable {
         byte[] buffer = null;
         InputStream is;
         try {
-            is = appContext.getAssets().open(text);
+            is = appContext.getAssets().open(cert);
             int size = is.available();
             buffer = new byte[size];
             is.read(buffer);

@@ -554,7 +554,7 @@ std::pair<int, WOLFSSL*> VPNServer::get_tunnel(const char *port) {
  * Terminates the application if even one of steps is failed.
  */
 void VPNServer::initSsl() {
-    char caCertLoc[]   = "certs/ca_cert.pem";
+    char caCertLoc[]   = "certs/ca_cert.crt";
     char servCertLoc[] = "certs/server-cert.pem";
     char servKeyLoc[]  = "certs/server-key.pem";
     /* Initialize wolfSSL */
@@ -566,26 +566,24 @@ void VPNServer::initSsl() {
     }
     /* Load CA certificates */
     if (wolfSSL_CTX_load_verify_locations(ctx, caCertLoc, 0) !=
-            SSL_SUCCESS) {
-        throw std::runtime_error(std::string() +
-                                 "Error loading " +
-                                 caCertLoc +
-                                 "please check if the file exists");
-    }
+            SSL_SUCCESS)
+        certError(caCertLoc);
+
     /* Load server certificates */
     if (wolfSSL_CTX_use_certificate_file(ctx, servCertLoc, SSL_FILETYPE_PEM) !=
-                                                                 SSL_SUCCESS) {
-        throw std::runtime_error(std::string() +
-                                 "Error loading " +
-                                 servCertLoc +
-                                 "please check if the file exists");
-    }
+                                                                 SSL_SUCCESS)
+        certError(servKeyLoc);
+
     /* Load server Keys */
     if (wolfSSL_CTX_use_PrivateKey_file(ctx, servKeyLoc,
-                SSL_FILETYPE_PEM) != SSL_SUCCESS) {
-        throw std::runtime_error(std::string() +
-                                 "Error loading " +
-                                 servKeyLoc +
-                                 "please check if the file exists");
-    }
+                SSL_FILETYPE_PEM) != SSL_SUCCESS)
+        certError(servKeyLoc);
+
+}
+
+void VPNServer::certError(const char * filename) {
+    throw std::runtime_error(std::string() +
+                             "Error loading '" +
+                             filename +
+                             "'. Please check if the file exists");
 }
