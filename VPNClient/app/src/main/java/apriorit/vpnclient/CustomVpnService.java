@@ -169,8 +169,12 @@ public class CustomVpnService /* renamed from 'VpnService' */ extends android.ne
         final int port = Integer.parseInt(prefs.getString(VpnClient.Prefs.SERVER_PORT, ""));
 
         // Kick off a connection.
-        startConnection(new apriorit.vpnclient.VpnConnection(
-                this, mNextConnectionId.getAndIncrement(), server, port, getApplicationContext()));
+        try {
+            startConnection(new VpnConnection(
+                    this, mNextConnectionId.getAndIncrement(), server, port, getApplicationContext()));
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     private void startConnection(final apriorit.vpnclient.VpnConnection connection) throws WolfSSLException {

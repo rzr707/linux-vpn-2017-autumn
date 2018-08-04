@@ -3,10 +3,12 @@ package apriorit.vpnclient;
 import static java.nio.charset.StandardCharsets.US_ASCII;
 
 import android.app.PendingIntent;
+import android.app.Service;
 import android.content.Context;
 import android.os.ParcelFileDescriptor;
 import android.os.PowerManager;
 import android.util.Log;
+import android.widget.Toast;
 
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -103,7 +105,7 @@ public class VpnConnection implements Runnable {
      */
     public VpnConnection(final CustomVpnService service, final int connectionId,
                          final String serverName, final int serverPort,
-                         Context appContext) throws WolfSSLException {
+                         Context appContext) throws Exception {
 
         /**
          * Load CA certificate from android assets:
@@ -147,7 +149,7 @@ public class VpnConnection implements Runnable {
         }
         if(status != WolfSSL.SSL_SUCCESS) {
             Log.e("WOLFSSL_SSL_FAILURE", "Failed to load ca certificate");
-            System.exit(1);
+            throw new Exception("Failed to load CA cert");
         }
 
         PowerManager powerManager = (PowerManager) appContext.getSystemService(Context.POWER_SERVICE);
