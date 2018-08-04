@@ -3,34 +3,10 @@
 
 #include "client_parameters.hpp"
 #include "tunnel_mgr.hpp"
+#include "ip_manager.hpp"
 
-#include <thread>
-#include <mutex>
-#include <atomic>
-#include <functional>
-
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <arpa/inet.h>
-#include <netinet/in.h>
-#include <sys/ioctl.h>
-#include <sys/socket.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <sys/file.h>
-#include <errno.h>
-#include <fcntl.h>
-#include <net/if.h>
-#include <linux/if_tun.h>
-
-#include <ifaddrs.h>
 #include <wolfssl/options.h>
 #include <wolfssl/ssl.h>
-#include <sys/time.h>
-
-#include <memory>
 
 /**
  * @brief The VPNServer class<br>
@@ -59,7 +35,7 @@ public:
         CLIENT_WANT_DISCONNECT = 2
     };
 
-    explicit VPNServer(int argc, char** argv);
+    VPNServer(int argc, char** argv);
     ~VPNServer();
 
     void initServer();

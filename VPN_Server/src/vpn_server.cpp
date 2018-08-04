@@ -1,5 +1,13 @@
 #include "vpn_server.hpp"
 
+#include <thread>
+
+#include <net/if.h>
+#include <linux/if_tun.h>
+#include <ifaddrs.h>
+
+#include <string.h>
+
 VPNServer::VPNServer (int argc, char** argv) {
     this->argc = argc;
     this->argv = argv;
@@ -84,8 +92,8 @@ void VPNServer::createNewConnection() {
     // run commands via unix terminal (needs sudo)
     in_addr_t serTunAddr    = manager->getAddrFromPool();
     in_addr_t cliTunAddr    = manager->getAddrFromPool();
-    std::string serverIpStr = IPManager::getIpString(serTunAddr);
-    std::string clientIpStr = IPManager::getIpString(cliTunAddr);
+    std::string serverIpStr = IPManager::ipToString(serTunAddr);
+    std::string clientIpStr = IPManager::ipToString(cliTunAddr);
     size_t tunNumber        = tunMgr->getTunNumber();
     std::string tunStr      = "vpn_tun" + std::to_string(tunNumber);
     std::string tempTunStr = tunStr;

@@ -1,5 +1,17 @@
 #include "tunnel_mgr.hpp"
 
+#include <stdexcept>
+#include <chrono>   // std::chrono::system_clock::now()
+#include <thread>
+#include <iomanip> // std::put_time
+#include <string.h>
+
+#include <unistd.h> // pid_t
+#include <signal.h> // SIGINT
+
+#include <sys/types.h>
+#include <ifaddrs.h>
+
 TunnelManager::TunnelManager() : tunNumber(0) { }
 
 TunnelManager::~TunnelManager() {
@@ -28,8 +40,8 @@ void TunnelManager::closeiftun(const std::string& tunStr) {
     execTerminalCommand(t.c_str());
 }
 
-void TunnelManager::closeTunNumber(const size_t& num,
-                                   const std::string tunPrefix) {
+void TunnelManager::closeTunNumber(const size_t num,
+                                   const std::__cxx11::string& tunPrefix) {
     closeiftun(std::string() + tunPrefix + "tun" + std::to_string(num));
     tunQueue.push(num);
     tunSet.erase(num);

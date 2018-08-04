@@ -3,20 +3,9 @@
 
 #include <iostream>
 #include <fstream>
-#include <stdexcept>
-#include <list>
-#include <chrono>   // std::chrono::system_clock::now()
 #include <queue>
 #include <set>
-#include <thread>
-#include <iomanip> // std::put_time
-#include <string.h>
-
-#include <unistd.h> // pid_t
-#include <signal.h> // SIGINT
-
-#include <sys/types.h>
-#include <ifaddrs.h>
+#include <list>
 
 #define GCC_VERSION (__GNUC__ * 10000 \
                      + __GNUC_MINOR__ * 100 \
@@ -44,7 +33,7 @@ public:
 
     void execTerminalCommand(const std::string& cmd);
     void closeiftun(const std::string& tunStr);
-    void closeTunNumber(const size_t& num, const std::string tunPrefix = "vpn_");
+    void closeTunNumber(const size_t num, const std::string& tunPrefix = "vpn_");
     void closeAllTunnels(const std::string tunPrefix = "vpn_");
     void closeAllTunnels(const std::list<std::string>& tunList);
     size_t getTunNumber();

@@ -1,7 +1,7 @@
 #ifndef CLIENT_PARAMETERS_HPP
 #define CLIENT_PARAMETERS_HPP
 
-#include "ip_manager.hpp"
+#include <string>
 
 /**
  * @brief The ClientParameters\r\n

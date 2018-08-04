@@ -3,6 +3,13 @@ CONFIG += console c++11
 CONFIG -= app_bundle
 CONFIG -= qt
 
+win32-g++ {
+   QMAKE_CXXFLAGS += -Werror
+}
+win32-msvc*{
+   QMAKE_CXXFLAGS += /WX
+}
+
 SOURCES += src/main.cpp \
     src/vpn_server.cpp \
     src/tunnel_mgr.cpp \
