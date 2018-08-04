@@ -1,4 +1,6 @@
 #include "vpn_server.hpp"
+#include "tunnel_mgr.hpp"
+#include "ip_manager.hpp"
 
 #include <thread>
 
@@ -8,56 +10,55 @@
 
 #include <string.h>
 
-VPNServer::VPNServer (int argc, char** argv) {
-    this->argc = argc;
-    this->argv = argv;
+VPNServer::VPNServer(int argc, char** argv) {
     parseArguments(argc, argv); // fill 'cliParams struct'
 
-    manager = new IPManager(cliParams.virtualNetworkIp + '/' + cliParams.networkMask,
-                            6); // IP pool init size
-    tunMgr  = new TunnelManager;
+    const size_t IP_POOL_INIT_SIZE = 6;
+
+    manager_.reset(new IPManager(cliParams_.virtualNetworkIp + '/' + cliParams_.networkMask,
+                                 IP_POOL_INIT_SIZE
+                                 )
+                   );
+    tunMgr_ .reset(new TunnelManager);
 
     // Enable IP forwarding
-    tunMgr->execTerminalCommand("echo 1 > /proc/sys/net/ipv4/ip_forward");
+    tunMgr_->execTerminalCommand("echo 1 > /proc/sys/net/ipv4/ip_forward");
 
     /* In case if program was terminated by error: */
-    tunMgr->cleanupTunnels();
+    tunMgr_->cleanupTunnels();
 
     // Pick a range of private addresses and perform NAT over chosen network interface.
-    std::string virtualLanAddress = cliParams.virtualNetworkIp + '/' + cliParams.networkMask;
-    std::string physInterfaceName = cliParams.physInterface;
+    std::string virtualLanAddress = cliParams_.virtualNetworkIp + '/' + cliParams_.networkMask;
+    std::string physInterfaceName = cliParams_.physInterface;
 
     // Delete previous rule if server crashed:
     std::string delPrevPostrouting
             = "iptables -t nat -D POSTROUTING -s " + virtualLanAddress +
               " -o " + physInterfaceName + " -j MASQUERADE";
-    tunMgr->execTerminalCommand(delPrevPostrouting);
+    tunMgr_->execTerminalCommand(delPrevPostrouting);
 
     std::string postrouting
             = "iptables -t nat -A POSTROUTING -s " + virtualLanAddress +
               " -o " + physInterfaceName + " -j MASQUERADE";
-    tunMgr->execTerminalCommand(postrouting);
+    tunMgr_->execTerminalCommand(postrouting);
     initSsl(); // initialize ssl context
 }
 
 VPNServer::~VPNServer() {
     // Clean all tunnels with prefix "vpn_"
-    tunMgr->cleanupTunnels();
+    tunMgr_->cleanupTunnels();
     // Disable IP Forwarding:
-    tunMgr->execTerminalCommand("echo 0 > /proc/sys/net/ipv4/ip_forward");
+    tunMgr_->execTerminalCommand("echo 0 > /proc/sys/net/ipv4/ip_forward");
     // Remove NAT rule from iptables:
-    std::string virtualLanAddress = cliParams.virtualNetworkIp + '/' + cliParams.networkMask;
-    std::string physInterfaceName = cliParams.physInterface;
+    std::string virtualLanAddress = cliParams_.virtualNetworkIp + '/' + cliParams_.networkMask;
+    std::string physInterfaceName = cliParams_.physInterface;
     std::string postrouting
             = "iptables -t nat -D POSTROUTING -s " + virtualLanAddress +
               " -o " + physInterfaceName + " -j MASQUERADE";
-    tunMgr->execTerminalCommand(postrouting);
+    tunMgr_->execTerminalCommand(postrouting);
 
-    wolfSSL_CTX_free(ctx);
+    wolfSSL_CTX_free(ctxPtr_);
     wolfSSL_Cleanup();
-
-    delete manager;
-    delete tunMgr;
 }
 
 /**
@@ -66,10 +67,10 @@ VPNServer::~VPNServer() {
  * waiting for a client
  */
 void VPNServer::initServer() {
-    mutex.lock();
+    mutex_.lock();
         std::cout << "\033[4;32mVPN Service is started (DTLS, ver.29.11.17)\033[0m"
                   << std::endl;
-    mutex.unlock();
+    mutex_.unlock();
 
     std::thread t(&VPNServer::createNewConnection, this);
     t.detach();
@@ -87,14 +88,14 @@ void VPNServer::initServer() {
  * in another thread
  */
 void VPNServer::createNewConnection() {
-    mutex.lock();
+    mutex_.lock();
     // create ssl from sslContext:
     // run commands via unix terminal (needs sudo)
-    in_addr_t serTunAddr    = manager->getAddrFromPool();
-    in_addr_t cliTunAddr    = manager->getAddrFromPool();
+    in_addr_t serTunAddr    = manager_->getAddrFromPool();
+    in_addr_t cliTunAddr    = manager_->getAddrFromPool();
     std::string serverIpStr = IPManager::ipToString(serTunAddr);
     std::string clientIpStr = IPManager::ipToString(cliTunAddr);
-    size_t tunNumber        = tunMgr->getTunNumber();
+    size_t tunNumber        = tunMgr_->getTunNumber();
     std::string tunStr      = "vpn_tun" + std::to_string(tunNumber);
     std::string tempTunStr = tunStr;
     int interface = 0; // Tun interface
@@ -115,19 +116,19 @@ void VPNServer::createNewConnection() {
         return;
     }
 
-    tunMgr->createUnixTunnel(serverIpStr,
+    tunMgr_->createUnixTunnel(serverIpStr,
                              clientIpStr,
                              tunStr);
     // Get TUN interface.
     interface = get_interface(tunStr.c_str());
 
-    mutex.unlock();
+    mutex_.unlock();
 
     // fill array with parameters to send:
     std::unique_ptr<ClientParameters> cliParams(buildParameters(clientIpStr));
 
     // wait for a tunnel.
-    while ((tunnel = get_tunnel(port.c_str())).first != -1
+    while ((tunnel = get_tunnel(port_.c_str())).first != -1
            &&
            tunnel.second != nullptr) {
 
@@ -236,7 +237,7 @@ void VPNServer::createNewConnection() {
                 }
 
                 // we are sending for a long time but not receiving.
-                if (timer > TIMEOUT_LIMIT) {
+                if (timer > TIMEOUT_LIMIT_MS) {
                     TunnelManager::log("[" + tempTunStr + "]" +
                                        "Sending for a long time but"
                                        " not receiving. Breaking...");
@@ -253,9 +254,9 @@ void VPNServer::createNewConnection() {
     wolfSSL_shutdown(tunnel.second);
     wolfSSL_free(tunnel.second);
     //
-    manager->returnAddrToPool(serTunAddr);
-    manager->returnAddrToPool(cliTunAddr);
-    tunMgr->closeTunNumber(tunNumber);
+    manager_->returnAddrToPool(serTunAddr);
+    manager_->returnAddrToPool(cliTunAddr);
+    tunMgr_->closeTunNumber(tunNumber);
 }
 
 /**
@@ -265,7 +266,7 @@ void VPNServer::createNewConnection() {
  * @param in_param - pointer on reference of parameter string to check
  * @param type     - index of parameters
  */
-void VPNServer::SetDefaultSettings(std::string *&in_param, const size_t& type) {
+void VPNServer::setDefaultSettings(std::string *&in_param, const size_t& type) {
     if(!in_param->empty())
         return;
 
@@ -288,20 +289,20 @@ void VPNServer::SetDefaultSettings(std::string *&in_param, const size_t& type) {
  * @param argv - arguments vector
  */
 void VPNServer::parseArguments(int argc, char** argv) {
-    std::string* std_params[default_values];
-    std_params[0] = &cliParams.mtu;
-    std_params[1] = &cliParams.virtualNetworkIp;
-    std_params[2] = &cliParams.networkMask;
-    std_params[3] = &cliParams.dnsIp;
-    std_params[4] = &cliParams.routeIp;
-    std_params[5] = &cliParams.routeMask;
-    std_params[6] = &cliParams.physInterface;
+    std::string* std_params[DEFAULT_ARG_COUNT];
+    std_params[0] = &cliParams_.mtu;
+    std_params[1] = &cliParams_.virtualNetworkIp;
+    std_params[2] = &cliParams_.networkMask;
+    std_params[3] = &cliParams_.dnsIp;
+    std_params[4] = &cliParams_.routeIp;
+    std_params[5] = &cliParams_.routeMask;
+    std_params[6] = &cliParams_.physInterface;
 
-    port = argv[1]; // port to listen
+    port_ = argv[1]; // port to listen
 
-    if(atoi(port.c_str()) < 1 || atoi(port.c_str()) > 0xFFFF) {
+    if(atoi(port_.c_str()) < 1 || atoi(port_.c_str()) > 0xFFFF) {
         throw std::invalid_argument(
-                    "Error: invalid number of port " + port);
+                    "Error: invalid number of port " + port_);
     }
 
     for(int i = 2; i < argc; ++i) {
@@ -309,52 +310,52 @@ void VPNServer::parseArguments(int argc, char** argv) {
             switch (argv[i][1]) {
                 case 'm':
                     if((i + 1) < argc) {
-                        cliParams.mtu = argv[i + 1];
+                        cliParams_.mtu = argv[i + 1];
                     }
-                    if(atoi(cliParams.mtu.c_str()) > 2000
-                       || atoi(cliParams.mtu.c_str()) < 1000) {
+                    if(atoi(cliParams_.mtu.c_str()) > 2000
+                       || atoi(cliParams_.mtu.c_str()) < 1000) {
                         throw std::invalid_argument("Invalid mtu");
                     }
                     break;
                 case 'a':
                     if((i + 1) < argc) {
-                            cliParams.virtualNetworkIp = argv[i + 1];
-                            if(!correctIp(cliParams.virtualNetworkIp)) {
+                            cliParams_.virtualNetworkIp = argv[i + 1];
+                            if(!correctIp(cliParams_.virtualNetworkIp)) {
                                 throw std::invalid_argument("Invalid network ip");
                             }
                     }
                     if((i + 2) < argc) {
-                        cliParams.networkMask = argv[i + 2];
-                        if(!correctSubmask(cliParams.networkMask)) {
+                        cliParams_.networkMask = argv[i + 2];
+                        if(!correctSubmask(cliParams_.networkMask)) {
                            throw std::invalid_argument("Invalid mask");
                         }
                     }
                     break;
                 case 'd':
                     if((i + 1) < argc) {
-                        cliParams.dnsIp = argv[i + 1];
+                        cliParams_.dnsIp = argv[i + 1];
                     }
-                    if(!correctIp(cliParams.dnsIp)) {
+                    if(!correctIp(cliParams_.dnsIp)) {
                         throw std::invalid_argument("Invalid dns IP");
                     }
                     break;
                 case 'r':
                     if((i + 1) < argc) {
-                        cliParams.routeIp = argv[i + 1];
+                        cliParams_.routeIp = argv[i + 1];
                     }
-                    if(!correctIp(cliParams.routeIp)) {
+                    if(!correctIp(cliParams_.routeIp)) {
                         throw std::invalid_argument("Invalid route IP");
                     }
                     if((i + 2) < argc) {
-                        cliParams.routeMask = argv[i + 2];
-                        if(!correctSubmask(cliParams.routeMask)) {
+                        cliParams_.routeMask = argv[i + 2];
+                        if(!correctSubmask(cliParams_.routeMask)) {
                             throw std::invalid_argument("Invalid route mask");
                         }
                     }
                     break;
                 case 'i':
-                    cliParams.physInterface = argv[i + 1];
-                    if(!isNetIfaceExists(cliParams.physInterface)) {
+                    cliParams_.physInterface = argv[i + 1];
+                    if(!isNetIfaceExists(cliParams_.physInterface)) {
                         throw std::invalid_argument("No such network interface");
                     }
                     break;
@@ -365,8 +366,8 @@ void VPNServer::parseArguments(int argc, char** argv) {
     /* if there was no specific arguments,
      *  default settings will be set up
      */
-    for(size_t i = 0; i < default_values; ++i)
-        SetDefaultSettings(std_params[i], i);
+    for(size_t i = 0; i < DEFAULT_ARG_COUNT; ++i)
+        setDefaultSettings(std_params[i], i);
 }
 
 /**
@@ -423,9 +424,9 @@ ClientParameters* VPNServer::buildParameters(const std::string& clientIp) {
     ClientParameters* cliParams = new ClientParameters;
     int size = sizeof(cliParams->parametersToSend);
     // Here is parameters string formed:
-    std::string paramStr = std::string() + "m," + this->cliParams.mtu +
-            " a," + clientIp + ",32 d," + this->cliParams.dnsIp +
-            " r," + this->cliParams.routeIp + "," + this->cliParams.routeMask;
+    std::string paramStr = std::string() + "m," + this->cliParams_.mtu +
+            " a," + clientIp + ",32 d," + this->cliParams_.dnsIp +
+            " r," + this->cliParams_.routeIp + "," + this->cliParams_.routeMask;
 
     // fill parameters array:
     cliParams->parametersToSend[0] = 0; // control messages always start with zero
@@ -480,7 +481,7 @@ std::pair<int, WOLFSSL*> VPNServer::get_tunnel(const char *port) {
     WOLFSSL* ssl;
 
     /* Create the WOLFSSL Object */
-    if ((ssl = wolfSSL_new(ctx)) == NULL) {
+    if ((ssl = wolfSSL_new(ctxPtr_)) == NULL) {
         throw std::runtime_error("wolfSSL_new error.");
     }
     setsockopt(tunnel, SOL_SOCKET, SO_REUSEADDR, &flag, sizeof(flag));
@@ -568,21 +569,21 @@ void VPNServer::initSsl() {
     wolfSSL_Init();
 
     /* Set ctx to DTLS 1.2 */
-    if ((ctx = wolfSSL_CTX_new(wolfDTLSv1_2_server_method())) == NULL) {
+    if ((ctxPtr_ = wolfSSL_CTX_new(wolfDTLSv1_2_server_method())) == NULL) {
         throw std::runtime_error("wolfSSL_CTX_new error.");
     }
     /* Load CA certificates */
-    if (wolfSSL_CTX_load_verify_locations(ctx, caCertLoc, 0) !=
+    if (wolfSSL_CTX_load_verify_locations(ctxPtr_, caCertLoc, 0) !=
             SSL_SUCCESS)
         certError(caCertLoc);
 
     /* Load server certificates */
-    if (wolfSSL_CTX_use_certificate_file(ctx, servCertLoc, SSL_FILETYPE_PEM) !=
+    if (wolfSSL_CTX_use_certificate_file(ctxPtr_, servCertLoc, SSL_FILETYPE_PEM) !=
                                                                  SSL_SUCCESS)
         certError(servKeyLoc);
 
     /* Load server Keys */
-    if (wolfSSL_CTX_use_PrivateKey_file(ctx, servKeyLoc,
+    if (wolfSSL_CTX_use_PrivateKey_file(ctxPtr_, servKeyLoc,
                 SSL_FILETYPE_PEM) != SSL_SUCCESS)
         certError(servKeyLoc);
 

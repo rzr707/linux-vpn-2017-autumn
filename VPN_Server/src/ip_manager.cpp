@@ -35,7 +35,7 @@ IPManager::IPManager(const std::__cxx11::string& ipAndMask, size_t poolInitSize)
 
         // address pool init:
         usedAddrCounter_ = 0;
-        addrPoolPtr_ = new std::queue<in_addr_t>();
+        addrPoolPtr_.reset(new std::queue<in_addr_t>);
         for(size_t i = 0; i < poolInitSize; ++i) {
             addrPoolPtr_->push(genNextIp());
         }
@@ -43,8 +43,8 @@ IPManager::IPManager(const std::__cxx11::string& ipAndMask, size_t poolInitSize)
 }
 
 
-IPManager::~IPManager() {
-    delete addrPoolPtr_;
+IPManager::~IPManager()
+{
 }
 
 /**

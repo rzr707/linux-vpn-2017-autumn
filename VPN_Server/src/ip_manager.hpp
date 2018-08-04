@@ -4,6 +4,7 @@
 #include <queue>
 #include <string>
 #include <mutex>
+#include <memory>
 
 /**
  * @brief The IPManager class
@@ -25,22 +26,26 @@ public:
     ~IPManager();
 
     in_addr_t getAddrFromPool();
-    void returnAddrToPool(in_addr_t ip);
     in_addr_t getSockaddrIn();
     in_addr_t genNextIp();
+
+    void returnAddrToPool(in_addr_t ip);
+
     uint32_t networkCapacity();
-    bool isInRange(in_addr_t nextAddr);
+
     std::string ipToString();
     std::string maskString();
     std::string getNetworkString();
 
+    bool isInRange(in_addr_t nextAddr);
+
     static std::string ipToString(in_addr_t ip);
 
 private:
-    in_addr_t              networkAddress_, ipaddr_, subnetMask_;
-    std::mutex             mutex_;
-    std::queue<in_addr_t>* addrPoolPtr_;
-    size_t                 usedAddrCounter_;
+    in_addr_t                              networkAddress_, ipaddr_, subnetMask_;
+    std::mutex                             mutex_;
+    std::unique_ptr<std::queue<in_addr_t>> addrPoolPtr_;
+    size_t                                 usedAddrCounter_;
 };
 
 #endif // IP_MANAGER_HPP
