@@ -31,6 +31,8 @@ public:
     ~VPNServer();
 
     void initServer();
+
+private:
     void createNewConnection();
     void setDefaultSettings(std::string *&in_param, const size_t& type);
     void parseArguments(int argc, char **argv);

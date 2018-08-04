@@ -1,6 +1,7 @@
 #include "vpn_server.hpp"
 #include "tunnel_mgr.hpp"
 #include "ip_manager.hpp"
+#include "utils/utils.hpp"
 
 #include <thread>
 
@@ -68,7 +69,9 @@ VPNServer::~VPNServer() {
  */
 void VPNServer::initServer() {
     mutex_.lock();
-        std::cout << "\033[4;32mVPN Service is started (DTLS, ver.29.11.17)\033[0m"
+        std::cout << "\033[4;32mVPN Service is started (DTLS, ver."
+                  << __DATE__
+                  << ")\033[0m"
                   << std::endl;
     mutex_.unlock();
 
@@ -111,7 +114,7 @@ void VPNServer::createNewConnection() {
     std::pair<int, WOLFSSL*> tunnel;
 
     if(serTunAddr == 0 || cliTunAddr == 0) {
-        TunnelManager::log("No free IP addresses. Tunnel will not be created.",
+        utils::Logger::log("No free IP addresses. Tunnel will not be created.",
                            std::cerr);
         return;
     }
@@ -132,7 +135,7 @@ void VPNServer::createNewConnection() {
            &&
            tunnel.second != nullptr) {
 
-        TunnelManager::log("New client connected to [" + tunStr + "]");
+        utils::Logger::log("New client connected to [" + tunStr + "]");
 
         // send the parameters several times in case of packet loss.
         for (int i = 0; i < 3; ++i) {
@@ -142,7 +145,7 @@ void VPNServer::createNewConnection() {
                              MSG_NOSIGNAL);
 
             if(sentParameters < 0) {
-                TunnelManager::log("Error sending parameters: " +
+                utils::Logger::log("Error sending parameters: " +
                                 std::to_string(sentParameters));
                 e = wolfSSL_get_error(tunnel.second, 0);
                 printf("error = %d, %s\n", e, wolfSSL_ERR_reason_error_string(e));
@@ -160,7 +163,7 @@ void VPNServer::createNewConnection() {
                 // write the outgoing packet to the tunnel.
                 sentData = wolfSSL_send(tunnel.second, packet, length, MSG_NOSIGNAL);
                 if(sentData < 0) {
-                    TunnelManager::log("sentData < 0");
+                    utils::Logger::log("sentData < 0");
                     e = wolfSSL_get_error(tunnel.second, 0);
                     printf("error = %d, %s\n", e, wolfSSL_ERR_reason_error_string(e));
                 }
@@ -176,7 +179,7 @@ void VPNServer::createNewConnection() {
             // read the incoming packet from the tunnel.
             length = wolfSSL_recv(tunnel.second, packet, sizeof(packet), 0);
             if (length == 0) {
-                TunnelManager::log(std::string() +
+                utils::Logger::log(std::string() +
                                    "recv() length == " +
                                    std::to_string(length) +
                                    ". Breaking..",
@@ -189,12 +192,12 @@ void VPNServer::createNewConnection() {
                     // write the incoming packet to the output stream.
                     sentData = write(interface, packet, length);
                     if(sentData < 0) {
-                        TunnelManager::log("write(interface, packet, length) < 0");
+                        utils::Logger::log("write(interface, packet, length) < 0");
                     }
                 } else {
-                    TunnelManager::log("Recieved empty control msg from client");
+                    utils::Logger::log("Recieved empty control msg from client");
                     if(packet[1] == CLIENT_WANT_DISCONNECT && length == 2) {
-                        TunnelManager::log("WANT_DISCONNECT from client");
+                        utils::Logger::log("WANT_DISCONNECT from client");
                         isClientConnected = false;
                     }
                 }
@@ -224,11 +227,11 @@ void VPNServer::createNewConnection() {
                     for (int i = 0; i < 3; ++i) {
                         sentData = wolfSSL_send(tunnel.second, packet, 1, MSG_NOSIGNAL);
                         if(sentData < 0) {
-                            TunnelManager::log("sentData < 0");
+                            utils::Logger::log("sentData < 0");
                             e = wolfSSL_get_error(tunnel.second, 0);
                             printf("error = %d, %s\n", e, wolfSSL_ERR_reason_error_string(e));
                         } else {
-                            TunnelManager::log("sent empty control packet");
+                            utils::Logger::log("sent empty control packet");
                         }
                     }
 
@@ -238,19 +241,19 @@ void VPNServer::createNewConnection() {
 
                 // we are sending for a long time but not receiving.
                 if (timer > TIMEOUT_LIMIT_MS) {
-                    TunnelManager::log("[" + tempTunStr + "]" +
+                    utils::Logger::log("[" + tempTunStr + "]" +
                                        "Sending for a long time but"
                                        " not receiving. Breaking...");
                     break;
                 }
             }
         }
-        TunnelManager::log("Client has been disconnected from tunnel [" +
+        utils::Logger::log("Client has been disconnected from tunnel [" +
                            tempTunStr + "]");
 
         break;
     }
-    TunnelManager::log("Tunnel closed.");
+    utils::Logger::log("Tunnel closed.");
     wolfSSL_shutdown(tunnel.second);
     wolfSSL_free(tunnel.second);
     //
@@ -509,7 +512,7 @@ std::pair<int, WOLFSSL*> VPNServer::get_tunnel(const char *port) {
         recievedLen = recvfrom(tunnel, packet, sizeof(packet), 0,
                               (sockaddr *)&addr, &addrlen);
         /*
-        TunnelManager::log("packet[0] == " +
+        utils::Logger::log("packet[0] == " +
                            std::to_string(packet[0]) +
                            ", packet[1] == " +
                            std::to_string(packet[1]) +
@@ -543,7 +546,7 @@ std::pair<int, WOLFSSL*> VPNServer::get_tunnel(const char *port) {
     // Try to accept ssl connection for 50 times:
     while( (acceptStatus = wolfSSL_accept(ssl)) != SSL_SUCCESS
           && tryCounter++ <= 50) {
-        TunnelManager::log("wolfSSL_accept(ssl) != SSL_SUCCESS. Sleeping..");
+        utils::Logger::log("wolfSSL_accept(ssl) != SSL_SUCCESS. Sleeping..");
         std::this_thread::sleep_for(std::chrono::microseconds(200000));
     }
 
