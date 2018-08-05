@@ -358,7 +358,9 @@ public class VpnConnection implements Runnable {
             connectedToServer = false;
 
             // free wakeLock to prevent battery draining:
-            wakeLock.release();
+            if (wakeLock.isHeld()) { // by some reason wakeLock isn't held
+                wakeLock.release();
+            }
         }
         return connectedToServer;
     }
