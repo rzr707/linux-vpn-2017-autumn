@@ -14,14 +14,16 @@ SOURCES += src/main.cpp \
     src/vpn_server.cpp \
     src/tunnel_mgr.cpp \
     src/ip_manager.cpp \
-    src/utils/utils.cpp
+    src/utils/utils.cpp \
+    src/tunnel.cpp
 
 HEADERS += \
     src/ip_manager.hpp \
     src/vpn_server.hpp \
     src/client_parameters.hpp \
     src/tunnel_mgr.hpp \
-    src/utils/utils.hpp
+    src/utils/utils.hpp \
+    src/tunnel.hpp
 
 LIBS += -lpthread \
         -lwolfssl \

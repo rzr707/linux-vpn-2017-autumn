@@ -23,9 +23,9 @@ TEST_F(IPManagerTest, TestGetNetworkIpString) {
 }
 
 TEST_F(IPManagerTest, TestGetNextIpAddress) {
-    ASSERT_EQ("10.0.0.1", mgr->getIpString());
+    ASSERT_EQ("10.0.0.1", mgr->ipToString());
     mgr->genNextIp();
-    ASSERT_EQ("10.0.0.2", mgr->getIpString());
+    ASSERT_EQ("10.0.0.2", mgr->ipToString());
 
 }
 

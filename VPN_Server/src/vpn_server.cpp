@@ -2,6 +2,7 @@
 #include "tunnel_mgr.hpp"
 #include "ip_manager.hpp"
 #include "utils/utils.hpp"
+#include "tunnel.hpp"
 
 #include <thread>
 
@@ -62,11 +63,7 @@ VPNServer::~VPNServer() {
     wolfSSL_Cleanup();
 }
 
-/**
- * @brief initServer\r\n
- * Main method, creates first thread with vpn connection,\r\n
- * waiting for a client
- */
+
 void VPNServer::initServer() {
     mutex_.lock();
         std::cout << "\033[4;32mVPN Service is started (DTLS, ver."
@@ -83,13 +80,6 @@ void VPNServer::initServer() {
     }
 }
 
-/**
- * @brief createNewConnection\r\n
- * Method creates new connection (tunnel)
- * waiting for client. When client is connected,
- * the new instance of this method will be runned
- * in another thread
- */
 void VPNServer::createNewConnection() {
     mutex_.lock();
     // create ssl from sslContext:
@@ -111,7 +101,7 @@ void VPNServer::createNewConnection() {
     bool idle = true;
     int length = 0;
     int sentData = 0;
-    std::pair<int, WOLFSSL*> tunnel;
+    Tunnel tunnel;
 
     if(serTunAddr == 0 || cliTunAddr == 0) {
         utils::Logger::log("No free IP addresses. Tunnel will not be created.",
@@ -131,23 +121,23 @@ void VPNServer::createNewConnection() {
     std::unique_ptr<ClientParameters> cliParams(buildParameters(clientIpStr));
 
     // wait for a tunnel.
-    while ((tunnel = get_tunnel(port_.c_str())).first != -1
+    while ((tunnel = getTunnel(port_.c_str())).getTunDescriptor() != -1
            &&
-           tunnel.second != nullptr) {
+           tunnel.getWolfSsl() != nullptr) {
 
         utils::Logger::log("New client connected to [" + tunStr + "]");
 
         // send the parameters several times in case of packet loss.
         for (int i = 0; i < 3; ++i) {
             sentParameters =
-                wolfSSL_send(tunnel.second, cliParams->parametersToSend,
+                wolfSSL_send(tunnel.getWolfSsl(), cliParams->parametersToSend,
                              sizeof(cliParams->parametersToSend),
                              MSG_NOSIGNAL);
 
             if(sentParameters < 0) {
                 utils::Logger::log("Error sending parameters: " +
                                 std::to_string(sentParameters));
-                e = wolfSSL_get_error(tunnel.second, 0);
+                e = wolfSSL_get_error(tunnel.getWolfSsl(), 0);
                 printf("error = %d, %s\n", e, wolfSSL_ERR_reason_error_string(e));
             }
         }
@@ -161,10 +151,10 @@ void VPNServer::createNewConnection() {
             length = read(interface, packet, sizeof(packet));
             if (length > 0) {
                 // write the outgoing packet to the tunnel.
-                sentData = wolfSSL_send(tunnel.second, packet, length, MSG_NOSIGNAL);
+                sentData = wolfSSL_send(tunnel.getWolfSsl(), packet, length, MSG_NOSIGNAL);
                 if(sentData < 0) {
                     utils::Logger::log("sentData < 0");
-                    e = wolfSSL_get_error(tunnel.second, 0);
+                    e = wolfSSL_get_error(tunnel.getWolfSsl(), 0);
                     printf("error = %d, %s\n", e, wolfSSL_ERR_reason_error_string(e));
                 }
 
@@ -177,7 +167,7 @@ void VPNServer::createNewConnection() {
             }
 
             // read the incoming packet from the tunnel.
-            length = wolfSSL_recv(tunnel.second, packet, sizeof(packet), 0);
+            length = wolfSSL_recv(tunnel.getWolfSsl(), packet, sizeof(packet), 0);
             if (length == 0) {
                 utils::Logger::log(std::string() +
                                    "recv() length == " +
@@ -225,10 +215,10 @@ void VPNServer::createNewConnection() {
                     // send empty control messages.
                     packet[0] = 0;
                     for (int i = 0; i < 3; ++i) {
-                        sentData = wolfSSL_send(tunnel.second, packet, 1, MSG_NOSIGNAL);
+                        sentData = wolfSSL_send(tunnel.getWolfSsl(), packet, 1, MSG_NOSIGNAL);
                         if(sentData < 0) {
                             utils::Logger::log("sentData < 0");
-                            e = wolfSSL_get_error(tunnel.second, 0);
+                            e = wolfSSL_get_error(tunnel.getWolfSsl(), 0);
                             printf("error = %d, %s\n", e, wolfSSL_ERR_reason_error_string(e));
                         } else {
                             utils::Logger::log("sent empty control packet");
@@ -253,22 +243,15 @@ void VPNServer::createNewConnection() {
 
         break;
     }
-    utils::Logger::log("Tunnel closed.");
-    wolfSSL_shutdown(tunnel.second);
-    wolfSSL_free(tunnel.second);
+    utils::Logger::log("Tunnel [" + tempTunStr + "] was closed.");
+    wolfSSL_shutdown(tunnel.getWolfSsl());
+    wolfSSL_free(tunnel.getWolfSsl());
     //
     manager_->returnAddrToPool(serTunAddr);
     manager_->returnAddrToPool(cliTunAddr);
     tunMgr_->closeTunNumber(tunNumber);
 }
 
-/**
- * @brief SetDefaultSettings
- * Set parameters if they were not set by
- * user via terminal arguments on startup
- * @param in_param - pointer on reference of parameter string to check
- * @param type     - index of parameters
- */
 void VPNServer::setDefaultSettings(std::string *&in_param, const size_t& type) {
     if(!in_param->empty())
         return;
@@ -284,13 +267,6 @@ void VPNServer::setDefaultSettings(std::string *&in_param, const size_t& type) {
     *in_param = default_values[type];
 }
 
-/**
- * @brief parseArguments method
- * is parsing arguments from terminal
- * and fills ClientParameters structure
- * @param argc - arguments count
- * @param argv - arguments vector
- */
 void VPNServer::parseArguments(int argc, char** argv) {
     std::string* std_params[DEFAULT_ARG_COUNT];
     std_params[0] = &cliParams_.mtu;
@@ -373,31 +349,16 @@ void VPNServer::parseArguments(int argc, char** argv) {
         setDefaultSettings(std_params[i], i);
 }
 
-/**
- * @brief VPNServer::correctSubmask checks netmask correctness
- * @param submaskString
- * @return true if submask is correct
- */
 bool VPNServer::correctSubmask(const std::string& submaskString) {
     int submask = std::atoi(submaskString.c_str());
     return (submask >= 0) && (submask <= 32);
 }
 
-/**
- * @brief VPNServer::correctIp checks IPv4 address correctness
- * @param ipAddr
- * @return true if IPv4 address is correct
- */
 bool VPNServer::correctIp(const std::string& ipAddr) {
     in_addr stub;
     return inet_pton(AF_INET, ipAddr.c_str(), &stub) == 1;
 }
 
-/**
- * @brief VPNServer::isNetIfaceExists checks existance of network interface
- * @param iface - system network interface name, e.g. 'eth0'
- * @return true if interface 'iface' exists
- */
 bool VPNServer::isNetIfaceExists(const std::string& iface) {
     ifaddrs *addrs, *tmp;
 
@@ -417,12 +378,6 @@ bool VPNServer::isNetIfaceExists(const std::string& iface) {
     return false;
 }
 
-/**
- * @brief buildParameters
- * @param clientIp - Client's tunnel IP address
- * @return         - pointer to ClientParameters structure
- * with filled parameters to send to the client.
- */
 ClientParameters* VPNServer::buildParameters(const std::string& clientIp) {
     ClientParameters* cliParams = new ClientParameters;
     int size = sizeof(cliParams->parametersToSend);
@@ -439,12 +394,6 @@ ClientParameters* VPNServer::buildParameters(const std::string& clientIp) {
     return cliParams;
 }
 
-/**
- * @brief get_interface
- * Tries to open dev/net/tun interface
- * @param name - tunnel interface name (e.g. "tun0")
- * @return descriptor of interface
- */
 int VPNServer::get_interface(const char *name) {
     int interface = open("/dev/net/tun", O_RDWR | O_NONBLOCK);
 
@@ -461,18 +410,7 @@ int VPNServer::get_interface(const char *name) {
     return interface;
 }
 
-/**
- * @brief get_tunnel
- * Method creates listening datagram socket for income connection,
- * binds it to IP address and waiting for connection.
- * When client is connected, method initialize SSL session and
- * set socket to nonblocking mode.
- * @param port - port to listen
- * @return If success, pair with socket descriptor and
- * SSL session object pointer will be returned, otherwise
- * negative SD and nullptr.
- */
-std::pair<int, WOLFSSL*> VPNServer::get_tunnel(const char *port) {
+Tunnel VPNServer::getTunnel(const char *port) {
     // we use an IPv6 socket to cover both IPv4 and IPv6.
     int tunnel = socket(AF_INET6, SOCK_DGRAM, 0);
     int flag = 1;
@@ -500,7 +438,7 @@ std::pair<int, WOLFSSL*> VPNServer::get_tunnel(const char *port) {
     // call bind(2) in a loop since Linux does not have SO_REUSEPORT.
     while (bind(tunnel, (sockaddr *)&addr, sizeof(addr))) {
         if (errno != EADDRINUSE) {
-            return std::pair<int, WOLFSSL*>(-1, nullptr);
+            return Tunnel(-1, nullptr);
         }
         std::this_thread::sleep_for(std::chrono::microseconds(100000));
     }
@@ -552,18 +490,12 @@ std::pair<int, WOLFSSL*> VPNServer::get_tunnel(const char *port) {
 
     if(tryCounter >= 50) {
         wolfSSL_free(ssl);
-        return std::pair<int, WOLFSSL*>(-1, nullptr);
+        return Tunnel(-1, nullptr);
     }
 
-    return std::pair<int, WOLFSSL*>(tunnel, ssl);
+    return Tunnel(tunnel, ssl);
 }
 
-/**
- * @brief initSsl
- * Initialize SSL library, load certificates and keys,
- * set up DTLS 1.2 protection type.
- * Terminates the application if even one of steps is failed.
- */
 void VPNServer::initSsl() {
     char caCertLoc[]   = "certs/ca_cert.crt";
     char servCertLoc[] = "certs/server-cert.pem";
